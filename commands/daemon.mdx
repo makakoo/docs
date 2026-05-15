@@ -1,0 +1,188 @@
+---
+title: "makakoo daemon: manage the Makakoo background service"
+description: "Reference for makakoo daemon — install, uninstall, status, logs, and run the background service that powers SANCHO, Brain sync, and mascot schedules."
+---
+
+The Makakoo daemon is the persistent background process that powers the SANCHO task engine, the Brain FTS5 watcher, the mascot schedules, and the MCP HTTP server when enabled. On macOS it runs as a LaunchAgent; on Linux it runs as a systemd user unit; on Windows it auto-launches from the startup folder. `makakoo install` sets up the daemon automatically — `makakoo daemon` is how you inspect, restart, or remove it afterward.
+
+---
+
+## Subcommands
+
+| Subcommand | Purpose |
+|---|---|
+| `daemon install` | Register the auto-start service for the current user. |
+| `daemon uninstall` | Remove the auto-start service. Does not stop a currently running daemon. |
+| `daemon status` | Print `running / installed / not installed` and the daemon PID when running. |
+| `daemon logs` | Tail the daemon log. |
+| `daemon run` | Run the daemon in the foreground (for debugging). |
+
+---
+
+## daemon install
+
+Register the daemon as a user-level auto-start service for the current user. Idempotent — re-running is safe and reloads the service definition.
+
+```bash
+makakoo daemon install
+```
+
+<Tabs>
+  <Tab title="macOS">
+    Writes a LaunchAgent plist to `~/Library/LaunchAgents/com.makakoo.daemon.plist` and loads it with `launchctl load`. The daemon starts immediately and auto-restarts on login.
+
+    <Note>
+    After writing the plist, macOS may block the LaunchAgent under Background Task management. If `makakoo daemon status` reports `not installed` immediately after `makakoo install`, go to **System Settings → General → Login Items & Extensions**, find Makakoo, and approve it. Then run `makakoo daemon install` again. Alternatively, log out and back in — the LaunchAgent loads on the next login.
+    </Note>
+  </Tab>
+  <Tab title="Linux">
+    Writes a systemd user unit file to `~/.config/systemd/user/makakoo-daemon.service` and runs `systemctl --user enable --now makakoo-daemon`. The daemon starts immediately and auto-restarts on login.
+  </Tab>
+  <Tab title="Windows">
+    Places a startup entry in the user's startup folder. The daemon launches on the next login. There is no equivalent to `systemctl --user enable` on Windows — the entry takes effect on the next session start.
+  </Tab>
+</Tabs>
+
+---
+
+## daemon uninstall
+
+Remove the auto-start service registration. Does not stop a currently running daemon process.
+
+```bash
+makakoo daemon uninstall
+```
+
+<Note>
+To do a clean restart after a config or plugin change, run `makakoo daemon uninstall` followed by `makakoo daemon install`. This re-registers the service and starts a fresh daemon process that picks up new SANCHO tasks and plugin manifests.
+</Note>
+
+---
+
+## daemon status
+
+Print the current daemon state.
+
+```bash
+makakoo daemon status
+```
+
+Possible outputs:
+
+```
+running   pid=12345   uptime=2m
+```
+```
+installed   (not running)
+```
+```
+not installed
+```
+
+---
+
+## daemon logs
+
+Tail the daemon log. All SANCHO task output, plugin lifecycle events, and MCP server messages land here.
+
+```bash
+makakoo daemon logs [-l <n>]
+```
+
+<ParamField path="-l / --lines" type="number" default="50">
+  Number of most-recent log lines to show.
+</ParamField>
+
+### Log location
+
+The daemon log is always at:
+
+```
+$MAKAKOO_HOME/logs/daemon.log
+```
+
+The file is rotated automatically at 50 MB. `makakoo daemon logs` reads the current file regardless of rotation state.
+
+<Tabs>
+  <Tab title="macOS">
+    ```
+    ~/MAKAKOO/logs/daemon.log
+    ~/Library/Logs/makakoo/daemon.log  (symlinked)
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```
+    ~/.local/share/makakoo/logs/daemon.log
+    (or $MAKAKOO_HOME/logs/daemon.log if MAKAKOO_HOME is set)
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```
+    %APPDATA%\makakoo\logs\daemon.log
+    (or $MAKAKOO_HOME/logs/daemon.log if MAKAKOO_HOME is set)
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## daemon run
+
+Run the daemon in the foreground. This is the same entrypoint the OS auto-start hook invokes. Output goes directly to the terminal. Press `Ctrl-C` to stop.
+
+```bash
+makakoo daemon run
+```
+
+Use `daemon run` to debug startup failures — you see all log lines live, including any tracebacks from SANCHO tasks or plugin load errors.
+
+---
+
+## Common workflows
+
+### Post-install health check
+
+```bash
+makakoo daemon status
+# expected: running   pid=12345   uptime=2m
+```
+
+### Restart after plugin or config changes
+
+<Steps>
+  <Step title="Unregister the service">
+    ```bash
+    makakoo daemon uninstall
+    ```
+  </Step>
+  <Step title="Re-register and start">
+    ```bash
+    makakoo daemon install
+    ```
+  </Step>
+  <Step title="Verify SANCHO picked up new tasks">
+    ```bash
+    makakoo sancho status
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+On macOS you can also use `launchctl` directly for a faster cycle:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.makakoo.daemon.plist
+launchctl load   ~/Library/LaunchAgents/com.makakoo.daemon.plist
+```
+</Tip>
+
+### Debug a failing daemon
+
+```bash
+# Check the last 100 log lines
+makakoo daemon logs -l 100
+
+# Run in the foreground to see live output
+makakoo daemon run
+# Ctrl-C to stop
+```

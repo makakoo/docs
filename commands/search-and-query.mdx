@@ -1,0 +1,179 @@
+---
+title: "makakoo search, query, and sync: Brain CLI commands"
+description: "Reference for makakoo search (FTS5 full-text), makakoo query (FTS5 + LLM synthesis), and makakoo sync — with flags, defaults, and examples."
+---
+
+The Brain exposes two read interfaces. `makakoo search` is a raw FTS5 full-text query — no network call, instant results, great for finding exact phrases, names, or URLs buried in journals and pages. `makakoo query` goes further: it retrieves the top matching hits, assembles them into an LLM context window alongside your persona and session memory, and asks the configured model to synthesize a short answer with citations. Use `search` when you want snippets; use `query` when you want an interpreted answer.
+
+The index that both commands read is built and maintained by `makakoo sync`.
+
+---
+
+## makakoo search
+
+Full-text search across your Brain — journals, pages, and auto-memory — using SQLite FTS5. No LLM is invoked.
+
+```bash
+makakoo search <query> [--limit <n>]
+```
+
+### Arguments and flags
+
+<ParamField path="query" type="string" required>
+  Query text. Use quotes to group phrases. FTS5 operators `AND`, `OR`, `NOT`, and `"..."` quoted phrases are all supported.
+</ParamField>
+
+<ParamField path="--limit" type="number" default="10">
+  Maximum number of hits to return. Short form: `-l`.
+</ParamField>
+
+### Examples
+
+<CodeGroup>
+
+```bash Exact phrase
+makakoo search "polymarket arbitrage"
+```
+
+```bash Limit results
+makakoo search "Traylinx" -l 5
+```
+
+```bash Boolean operators
+# Pages containing both terms
+makakoo search "adapter AND openai-compat"
+
+# Pages mentioning a project but not a noisy term
+makakoo search "lope NOT codex"
+```
+
+```bash Person or entity
+makakoo search "Igor Varzin"
+
+# All wikilink references to a project
+makakoo search "[[arbitrage-agent]]"
+```
+
+</CodeGroup>
+
+### What it searches
+
+The FTS5 index covers three sources, all stored in `$MAKAKOO_HOME/data/superbrain.db`:
+
+- `data/Brain/journals/` — daily journal files
+- `data/Brain/pages/` — named pages
+- `data/auto-memory/` — auto-memory snippets written by the daemon
+
+<Note>
+If `makakoo search` returns zero hits for something you know is in the Brain, the index may be stale. Run `makakoo sync` to flush new files into FTS5, then retry. If hits are still missing, verify that `$MAKAKOO_HOME` points to the correct directory.
+</Note>
+
+---
+
+## makakoo query
+
+Ask a natural-language question. Retrieves the top matching hits from the Brain using FTS5 and vector search, then asks the configured LLM to synthesize a short answer with citations.
+
+```bash
+makakoo query <question> [--top-k <n>] [--model <name>] [-v]
+```
+
+### Arguments and flags
+
+<ParamField path="question" type="string" required>
+  Natural-language question. Use quotes to pass a multi-word question as a single argument.
+</ParamField>
+
+<ParamField path="--top-k" type="number" default="5">
+  Number of retrieved hits to pass to the LLM context. Increase for broader coverage; higher values consume more tokens.
+</ParamField>
+
+<ParamField path="--model" type="string" default="ail-compound">
+  Override the LLM model name for this call. Defaults to `ail-compound` when not specified.
+</ParamField>
+
+<ParamField path="-v / --show-memory" type="boolean" default="false">
+  Print the assembled L0 (persona) + L1 (session context) + L2 (retrieved hits) memory block before the LLM answer. Useful for debugging why an answer is missing expected context.
+</ParamField>
+
+### Examples
+
+<CodeGroup>
+
+```bash Recall a decision
+makakoo query "what did I decide about the database migration?"
+```
+
+```bash Debug missing context
+makakoo query "Polymarket arbitrage strategy" --show-memory
+```
+
+```bash More context, different model
+makakoo query "summarize all career decisions from last month" \
+  --model ail-compound \
+  --top-k 10
+```
+
+</CodeGroup>
+
+### How it works
+
+1. FTS5 keyword search over `superbrain.db`.
+2. Vector similarity search (when embeddings are present).
+3. Top-k hits merged, deduplicated, and ranked.
+4. LLM prompt assembled: L0 persona + L1 session context + L2 retrieved hits.
+5. LLM response streamed to stdout, followed by a source citations block.
+
+<Note>
+If `makakoo query` returns "I don't have information about that" for something you recently wrote, run `makakoo sync` to flush the journal entry into the index, then retry.
+</Note>
+
+---
+
+## makakoo sync
+
+Sync on-disk Brain files into the FTS5 index. Run this manually after writing new journal entries outside of a daemon session, or after bulk imports. SANCHO runs `brain_sync_tick` every 30 minutes automatically.
+
+```bash
+makakoo sync [--force] [--embed] [--no-auto-memory] [--embed-limit <n>] [--file <path>]
+```
+
+### Flags
+
+<ParamField path="--force" type="boolean" default="false">
+  Re-index every file regardless of the stored `content_hash`. Use this to force a full re-index after an index corruption or schema migration.
+</ParamField>
+
+<ParamField path="--embed" type="boolean" default="false">
+  Also embed documents that do not have vectors yet. Requires a reachable embedding gateway. Best-effort — failures are logged and skipped, the sync continues.
+</ParamField>
+
+<ParamField path="--no-auto-memory" type="boolean" default="false">
+  Skip the auto-memory directory (`data/auto-memory/`). By default, auto-memory is included in the sync walk.
+</ParamField>
+
+<ParamField path="--embed-limit" type="number" default="200">
+  Maximum number of documents to embed in a single sync pass when `--embed` is set. Prevents runaway token usage on large Brains.
+</ParamField>
+
+<ParamField path="--file" type="string">
+  Index a single file under `pages/` or `journals/` instead of walking the full tree. Useful as a post-write hook: `makakoo sync --file "$MAKAKOO_HOME/data/Brain/journals/today.md"`.
+</ParamField>
+
+### When to run sync
+
+<Steps>
+  <Step title="After manual journal writes">
+    If you wrote a file directly to `data/Brain/` without going through a daemon session, run `makakoo sync` to flush it into the FTS5 index before querying.
+  </Step>
+  <Step title="After bulk imports">
+    If you imported a large set of pages or moved the Brain location, run `makakoo sync --force` to rebuild the index from scratch.
+  </Step>
+  <Step title="To add embeddings">
+    Run `makakoo sync --embed` once after pointing Makakoo at an embedding gateway to backfill vectors for all existing documents.
+  </Step>
+</Steps>
+
+<Tip>
+Under normal use you rarely need to run `makakoo sync` manually. The SANCHO `brain_sync_tick` task keeps the index fresh every 30 minutes. Check its last-run time with `makakoo sancho status`.
+</Tip>

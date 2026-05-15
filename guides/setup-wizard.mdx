@@ -1,0 +1,162 @@
+---
+title: "Makakoo OS setup wizard walkthrough"
+description: "Step-by-step guide to the makakoo setup wizard: walk all 6 sections, re-run individual sections, and understand each configuration area."
+---
+
+`makakoo setup` is the interactive configuration wizard that walks you through every one-time setup step: naming the assistant, registering Brain sources, installing the blessed CLI agent and terminal, picking a primary LLM adapter, and infecting local CLI hosts with the Makakoo bootstrap block. Fresh installs are offered the wizard automatically at the end of `makakoo install`; you can also re-run it at any time, or target a single section when something changes.
+
+## Running the wizard
+
+<Steps>
+
+  <Step title="Start the full wizard">
+    Run with no arguments to walk every section in order:
+
+    ```bash
+    makakoo setup
+    ```
+
+    The wizard detects what is already configured and skips sections whose desired state is already satisfied. Each pending section presents a `[Y/n/s]` prompt.
+  </Step>
+
+  <Step title="Answer each prompt">
+    Every prompt accepts three responses:
+
+    | Key | Meaning |
+    |-----|---------|
+    | `y` / Enter (on a Y-default) | Proceed — run the section now |
+    | `n` | Decline this run; re-ask on the next `setup` |
+    | `s` | Mark as skipped; the wizard will not re-ask unless you run `--reset` |
+  </Step>
+
+  <Step title="Confirm the result">
+    After all sections complete, check what was recorded:
+
+    ```bash
+    makakoo setup --non-interactive
+    ```
+
+    This prints the current state of every section and exits without prompting — useful any time you want a quick status check.
+  </Step>
+
+</Steps>
+
+## All setup commands
+
+```bash
+makakoo setup                    # walk every section in order
+makakoo setup <section>          # run one section by name
+makakoo setup --only persona,brain   # run only the named sections
+makakoo setup --skip terminal    # run every section except the named ones
+makakoo setup --non-interactive  # print current state and exit; no prompts
+makakoo setup --reset            # wipe state file; re-ask every section
+makakoo setup --force            # re-run persona even if persona.json exists
+```
+
+<Note>
+  When stdin is not a TTY (CI pipelines, piped input), the wizard automatically prints current state and exits without prompting. `--non-interactive` forces this same behaviour from an interactive terminal.
+</Note>
+
+## The six sections
+
+<AccordionGroup>
+
+  <Accordion title="persona — name your assistant">
+    Names your AI assistant, sets pronouns, and picks a default voice.
+
+    **Satisfied when:** `$MAKAKOO_HOME/config/persona.json` exists.
+
+    **Re-run:** `makakoo setup persona` (add `--force` to overwrite an existing persona).
+
+    The persona name appears in the bootstrap block that all infected CLIs receive, so every AI CLI refers to your assistant by the same name.
+  </Accordion>
+
+  <Accordion title="brain — register vault sources">
+    Shells into the `skill-brain-multi-source` picker to register Obsidian vaults, plain markdown folders, or Logseq vaults as Brain sources.
+
+    **Satisfied when:** `$MAKAKOO_HOME/config/brain_sources.json` has at least one non-default source.
+
+    **Re-run:** `makakoo setup brain`
+
+    You can skip this section if you plan to write directly to `~/MAKAKOO/data/Brain/` and do not need an external vault.
+  </Accordion>
+
+  <Accordion title="cli-agent — install pi">
+    Installs `pi` (`@mariozechner/pi-coding-agent`) via `npm install -g`.
+
+    **Satisfied when:** `pi` is on `$PATH`.
+
+    **Re-run:** `makakoo setup cli-agent`
+
+    If `npm` is not installed, the section fails with a clear hint rather than trying to install npm itself.
+
+    <Tip>
+      SANCHO's `sancho-task-cli-pi` plugin (part of the `core` distro) keeps pi up to date via a 24-hour auto-update task — the wizard handles first-time install only.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="terminal — install Ghostty (macOS only)">
+    Installs Ghostty via `brew install --cask ghostty`. This section is a no-op on Linux and Windows.
+
+    **Satisfied when:** `brew list --cask ghostty` exits 0.
+
+    **Re-run:** `makakoo setup terminal`
+
+    If `brew` is not installed, the section fails with a clear hint. `brew install --cask ghostty` is only invoked after an explicit `Y` — Makakoo never runs a package manager you have not confirmed.
+  </Accordion>
+
+  <Accordion title="model-provider — pick an LLM adapter">
+    Writes `~/.makakoo/primary_adapter.toml` naming the default routing adapter — switchAILocal, Anthropic, OpenRouter, or any other registered adapter.
+
+    **Satisfied when:** `~/.makakoo/primary_adapter.toml` exists and points to a registered adapter.
+
+    **Re-run:** `makakoo setup model-provider`
+
+    To see all registered adapters without picking one:
+
+    ```bash
+    makakoo adapter list
+    ```
+
+    API keys are configured through each adapter's own doctor or install flow, not here.
+  </Accordion>
+
+  <Accordion title="infect — bootstrap all AI CLIs">
+    A thin wrapper over `makakoo infect` that writes the Makakoo bootstrap block to every detected AI CLI host's global instructions file. Does **not** touch your shell dotfiles.
+
+    **Satisfied when:** `makakoo infect --verify` exits 0 (no drift detected).
+
+    **Re-run:** `makakoo setup infect`
+
+    You can also run infect directly for more control:
+
+    ```bash
+    makakoo infect --verify                   # audit-only, no writes
+    makakoo infect --target claude,opencode   # restrict to specific CLIs
+    makakoo infect --verify --json            # machine-readable drift report
+    ```
+  </Accordion>
+
+</AccordionGroup>
+
+## State file
+
+The wizard records per-section status in `$MAKAKOO_HOME/state/makakoo-setup/completed.json`. Here is what it looks like after a successful full run:
+
+```json
+{
+  "version": 1,
+  "sections": {
+    "persona":        { "status": "Completed", "at": "2026-04-23T17:30:00Z" },
+    "brain":          { "status": "Skipped",   "at": "2026-04-23T17:31:12Z" },
+    "cli-agent":      { "status": "Completed", "at": "2026-04-23T17:32:48Z" },
+    "terminal":       { "status": "Completed", "at": "2026-04-23T17:33:19Z" },
+    "model-provider": { "status": "Completed", "at": "2026-04-23T17:34:02Z" },
+    "infect":         { "status": "Completed", "at": "2026-04-23T17:34:55Z" }
+  }
+}
+```
+
+The file is written atomically (tmp + rename). If it is unreadable or version-mismatched, the wizard reverts all sections to "not started" on load — nothing crashes.
+
+Run `makakoo setup --reset` to wipe this file and re-ask every section from scratch.

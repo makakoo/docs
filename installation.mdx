@@ -1,0 +1,300 @@
+---
+title: "Install Makakoo OS on macOS, Linux, and Windows"
+description: "Step-by-step install instructions for every platform and method: curl-pipe, Homebrew, PowerShell, and from source — with PATH fix, completions, and upgrade."
+---
+
+Makakoo OS ships pre-built binaries for macOS (Apple Silicon and Intel), Linux (x86-64 and arm64), and Windows (x86-64 and arm64). This page covers all four install methods in full detail, including PATH setup, shell completions, macOS Gatekeeper, and upgrading. If you just want the fastest path to a working install, see [Get started with Makakoo OS](/quickstart) instead.
+
+## Before you start
+
+You need a terminal. On macOS open **Terminal** (Spotlight → type `Terminal`). On Linux press `Ctrl+Alt+T`. On Windows open **PowerShell** (Start → type `PowerShell`, choose **Windows PowerShell** — not ISE).
+
+<Warning>
+  Windows users must enable **Developer Mode** before running the installer. Makakoo uses symlinks for plugin wiring, which require this permission on Windows. Go to **Settings → Privacy & security → For developers → Developer Mode** and toggle it on.
+</Warning>
+
+No admin privileges, GitHub account, or API key are required to install.
+
+## Install methods
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ### Curl-pipe (recommended)
+
+    The fastest path. The script detects your OS and CPU, downloads the matching pre-built binary into `~/.local/bin/`, and automatically runs `makakoo install` — which installs the core distro, registers the daemon, and infects every AI CLI it detects.
+
+    ```bash
+    curl -fsSL https://makakoo.com/install.sh | sh
+    ```
+
+    <Steps>
+      <Step title="Run the installer">
+        Paste the command above into your terminal and press Enter. You will see:
+
+        ```
+        Makakoo OS installer
+          target:       aarch64-apple-darwin
+          version:      latest
+          install dir:  /Users/you/.local/bin
+          source:       https://github.com/makakoo/makakoo-os/releases/latest/download/...
+
+        downloading…
+        extracting…
+        installed: /Users/you/.local/bin/makakoo
+
+        next step:
+            /Users/you/.local/bin/makakoo install
+        ```
+      </Step>
+      <Step title="Wait for makakoo install to complete">
+        The script execs `makakoo install` automatically. This step installs the `core` plugin distro (38 plugins), registers the background daemon, and infects every detected AI CLI. It takes about 30 seconds.
+
+        ```
+        install plan
+          distro:   core
+          daemon:   install
+          infect:   global CLI slots
+
+          detected hosts:
+            - claude:  binary=/opt/homebrew/bin/claude
+                       config=~/.claude/CLAUDE.md (will create)
+            - gemini:  binary=/opt/homebrew/bin/gemini
+                       config=~/.gemini/GEMINI.md (will create)
+
+        [1/3] installing distro core…
+        ✓ 38 plugins installed
+        [2/3] installing daemon…
+        ✓ LaunchAgent registered
+        [3/3] infecting 4 detected CLI host(s)…
+        ✓ 4 slots updated
+
+        install complete
+        ```
+      </Step>
+      <Step title="Walk the setup wizard">
+        After a successful install, `makakoo install` offers the interactive setup wizard. Press Enter to accept defaults — you can re-run any section later with `makakoo setup --only <section>`.
+      </Step>
+    </Steps>
+
+    ### Homebrew
+
+    If you prefer to manage tools through Homebrew:
+
+    ```bash
+    brew install traylinx/tap/makakoo
+    makakoo install
+    ```
+
+    `brew install` places the binaries only. You must run `makakoo install` yourself to set up the distro, daemon, and infect step. Future upgrades go through Homebrew:
+
+    ```bash
+    brew upgrade traylinx/tap/makakoo
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ### PowerShell one-liner (recommended)
+
+    <Warning>
+      Developer Mode must be enabled before you run this. See the prerequisite at the top of this page.
+    </Warning>
+
+    Open **Windows PowerShell** (not PowerShell ISE) and run:
+
+    ```powershell
+    iwr -UseBasicParsing https://makakoo.com/install.ps1 | iex
+    ```
+
+    <Steps>
+      <Step title="Run the installer">
+        The script detects your architecture, downloads the matching binary into `%LOCALAPPDATA%\Makakoo\bin\`, and automatically execs `makakoo install`.
+      </Step>
+      <Step title="Allow the background item if prompted">
+        Windows may prompt you to allow a background process. Click **Allow**. This is a one-time approval for the auto-launch entry that keeps the Makakoo daemon running.
+      </Step>
+      <Step title="Walk the setup wizard">
+        After install completes, the interactive wizard launches automatically. Press Enter to accept defaults at every prompt.
+      </Step>
+    </Steps>
+
+    To skip the auto-run and install the binary only:
+
+    ```powershell
+    $env:MAKAKOO_NO_AUTORUN = "1"
+    iwr -UseBasicParsing https://makakoo.com/install.ps1 | iex
+    # then run manually:
+    makakoo install
+    ```
+  </Tab>
+  <Tab title="From source">
+    Building from source works on every platform and is the recommended path for contributors.
+
+    **Prerequisites:** [Rust toolchain](https://rustup.rs) (stable channel).
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/makakoo/makakoo-os
+        cd makakoo-os
+        ```
+      </Step>
+      <Step title="Install the binaries">
+        ```bash
+        cargo install --path makakoo
+        cargo install --path makakoo-mcp
+        ```
+
+        Both binaries land in `~/.cargo/bin/`, which `rustup` adds to your PATH automatically.
+      </Step>
+      <Step title="Run the install orchestrator">
+        ```bash
+        makakoo install
+        ```
+
+        This installs the `core` distro, registers the daemon, and infects detected AI CLI hosts — same as the curl-pipe path.
+      </Step>
+    </Steps>
+
+    To build without installing (for development):
+
+    ```bash
+    cargo build --release --workspace
+    cargo test --workspace
+    ```
+
+    Release binaries land in `target/release/`. Stripped sizes are approximately 5 MB (`makakoo`) and 4.7 MB (`makakoo-mcp`) on `aarch64-apple-darwin`.
+  </Tab>
+</Tabs>
+
+## Unattended and CI installs
+
+Set `MAKAKOO_NO_AUTORUN=1` (sh) or `$env:MAKAKOO_NO_AUTORUN = "1"` (PowerShell) before the curl-pipe to prevent the automatic `makakoo install` hand-off. The script places the binary and exits. You then call `makakoo install --no-setup` yourself:
+
+```bash
+MAKAKOO_NO_AUTORUN=1 curl -fsSL https://makakoo.com/install.sh | sh
+makakoo install --no-setup   # distro + daemon + infect, no wizard prompt
+```
+
+The `--no-setup` flag skips the interactive wizard hand-off at the end of `makakoo install`. Non-TTY installs never prompt regardless of the flag.
+
+## PATH fix for ~/.local/bin
+
+The curl-pipe installer places `makakoo` in `~/.local/bin/`. If your shell reports `command not found: makakoo` after install, that directory is not on your `PATH`. Add it:
+
+<Tabs>
+  <Tab title="zsh (macOS default)">
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
+  </Tab>
+  <Tab title="bash">
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+  </Tab>
+</Tabs>
+
+Close and re-open your terminal, then run `makakoo --version` to confirm.
+
+## macOS Gatekeeper
+
+The first time the install runs, macOS may show a security prompt about a background item trying to load. Click **Allow** in the dialog, or go to **System Settings → General → Login Items → Allow in the Background** and toggle Makakoo on.
+
+If you miss the prompt, the install finishes but the daemon won't start. Re-run the daemon registration:
+
+```bash
+makakoo daemon install
+```
+
+This is a one-time approval. Future installs and upgrades are silent.
+
+## Shell completions
+
+`makakoo completion <shell>` generates a completion script that covers every subcommand and flag. Install once — `makakoo plugin <TAB>` then completes to `list`, `info`, `install`, `uninstall`, `enable`, `disable`, `update`.
+
+<Tabs>
+  <Tab title="zsh">
+    ```bash
+    mkdir -p ~/.zfunc
+    makakoo completion zsh > ~/.zfunc/_makakoo
+    ```
+
+    Add to `~/.zshrc` before `compinit`:
+
+    ```zsh
+    fpath+=("$HOME/.zfunc")
+    autoload -Uz compinit && compinit
+    ```
+
+    Open a new shell to activate.
+  </Tab>
+  <Tab title="bash">
+    ```bash
+    # User-level (no sudo required):
+    mkdir -p ~/.local/share/bash-completion/completions
+    makakoo completion bash > ~/.local/share/bash-completion/completions/makakoo
+    ```
+
+    Open a new shell to activate.
+  </Tab>
+  <Tab title="fish">
+    ```bash
+    makakoo completion fish > ~/.config/fish/completions/makakoo.fish
+    ```
+
+    Completions are active immediately in new fish sessions.
+  </Tab>
+  <Tab title="elvish">
+    ```bash
+    makakoo completion elvish >> ~/.config/elvish/rc.elv
+    ```
+  </Tab>
+  <Tab title="PowerShell">
+    ```powershell
+    makakoo completion powershell >> $PROFILE
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  For live tab-completion of installed plugin names on `makakoo plugin info <TAB>`, add a thin wrapper using `makakoo plugin list --json | jq -r '.[].name'`. See the [completions README](https://github.com/makakoo/makakoo-os/tree/main/install/completions) for shell-specific snippets.
+</Tip>
+
+## Verify the install
+
+After `makakoo install` and the setup wizard complete, run:
+
+```bash
+makakoo --version
+makakoo status
+makakoo query "hello"
+```
+
+All three commands should succeed. `makakoo status` shows the daemon PID, infected CLI hosts, installed plugins, and Brain path. `makakoo query "hello"` confirms the Brain and LLM pipeline are reachable.
+
+## Upgrade
+
+`makakoo upgrade` auto-detects how you installed and runs the matching update path:
+
+```bash
+makakoo upgrade             # cargo / brew / curl-pipe — picks the right path
+makakoo upgrade --dry-run   # preview the plan without running it
+makakoo upgrade --reinfect  # also refresh bootstrap blocks in every CLI host
+```
+
+<Note>
+  If you installed via Homebrew, `makakoo upgrade` calls `brew upgrade traylinx/tap/makakoo` under the hood. You can also upgrade directly with `brew upgrade traylinx/tap/makakoo`.
+</Note>
+
+## Uninstall
+
+To remove Makakoo cleanly:
+
+```bash
+makakoo uninfect          # strip bootstrap block from every CLI host
+makakoo daemon uninstall  # remove the auto-launch daemon entry
+rm -rf ~/.makakoo ~/MAKAKOO
+```
+
+`makakoo uninfect` is the symmetric inverse of `makakoo infect --global`. It removes the marker-delimited Makakoo block from each CLI's config file, deletes the config file if it would be left empty, and preserves any prose you wrote around the block.

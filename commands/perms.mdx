@@ -1,0 +1,257 @@
+---
+title: "makakoo perms: manage runtime filesystem write grants"
+description: "Reference for makakoo perms — list, grant, revoke, purge, and audit runtime write-access grants that extend the Makakoo capability sandbox."
+---
+
+By default, Makakoo agents can only write inside a small hardcoded baseline: `~/MAKAKOO/data/reports`, `~/MAKAKOO/data/drafts`, `~/MAKAKOO/tmp`, and `/tmp`. Everything else is refused. `makakoo perms` is the way to extend that surface at runtime — without editing code, without restarting anything, and with a full audit trail.
+
+Grants are stored in `$MAKAKOO_HOME/config/user_grants.json` and enforced by the same handler that the MCP `grant_write_access` and `list_write_grants` tools write to. All surfaces share one store and emit the same audit entries.
+
+---
+
+## Subcommands
+
+| Subcommand | Purpose |
+|---|---|
+| [`list`](#list) | Show baseline roots and active grants. |
+| [`grant`](#grant) | Issue a new write grant. |
+| [`revoke`](#revoke) | Revoke a grant by id or by path. |
+| [`purge`](#purge) | Drop all expired grants immediately. |
+| [`audit`](#audit) | Query the audit log for perms events. |
+| [`show`](#show) | Show detail for one grant by id. |
+
+---
+
+## list
+
+```bash
+makakoo perms list [--all] [--json]
+```
+
+<ParamField path="--all" type="boolean" default="false">
+  Include expired grants from today in the output. By default only active grants are shown.
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Emit a machine-readable JSON envelope. The schema matches the MCP `list_write_grants` response so callers can use one parser for both surfaces.
+</ParamField>
+
+Example human output:
+
+```
+Baseline: ~/MAKAKOO/data/reports, ~/MAKAKOO/data/drafts, ~/MAKAKOO/tmp, /tmp.
+2 active grants: /Users/you/sprint/** until 17:00 CEST,
+/Users/you/notes/** permanent. 1 expired today.
+```
+
+---
+
+## grant
+
+Issue a new write grant. The default duration is 1 hour.
+
+```bash
+makakoo perms grant <path> [--for <duration>] [--label <text>] [--plugin <name>] [--mkdir] [--yes-really]
+```
+
+<ParamField path="path" type="string" required>
+  Path to grant write access to. `~` and `$VAR` are expanded at grant time, not at check time.
+</ParamField>
+
+<ParamField path="--for" type="string" default="1h">
+  Grant duration. Accepted values: `30m`, `1h`, `24h`, `7d`, `permanent`. Any other string — including natural-language phrases like "for an hour" — is rejected.
+</ParamField>
+
+<ParamField path="--label" type="string">
+  Free-text label up to 80 characters. Shown in `perms list` and audit log entries. Control characters are stripped.
+</ParamField>
+
+<ParamField path="--plugin" type="string" default="cli">
+  Caller-surface attribution string. Recorded on the grant and in the audit log. Defaults to `cli`.
+</ParamField>
+
+<ParamField path="--mkdir" type="boolean" default="false">
+  Create the target directory if it does not exist before writing the grant.
+</ParamField>
+
+<ParamField path="--yes-really" type="boolean" default="false">
+  Required to issue a `permanent` grant for a path outside `$MAKAKOO_HOME`. Without this flag, permanent grants for external paths are rejected.
+</ParamField>
+
+### Scope refusal
+
+<Warning>
+The following paths are always rejected regardless of flags. They return "scope too broad — grant a specific subdirectory":
+
+`/` · `~` · `~/` · `$HOME` · `*` · `**` · `.` · `./` · `$HOME/` · `~/**` · `$HOME/**`
+
+Grant a specific subdirectory instead.
+</Warning>
+
+### Examples
+
+```bash
+# 1-hour grant with a label
+makakoo perms grant ~/code/scratch/ --for 1h --label "debug session"
+# → g_20260421_a3f21c4b
+
+# 7-day grant
+makakoo perms grant ~/long-project/ --for 7d
+
+# Permanent grant inside MAKAKOO_HOME (no --yes-really needed)
+makakoo perms grant ~/MAKAKOO/notes/ --for permanent
+
+# Permanent grant outside MAKAKOO_HOME (requires --yes-really)
+makakoo perms grant /opt/things/ --for permanent --yes-really
+```
+
+### Rate limits
+
+| Limit | Default |
+|---|---|
+| Maximum simultaneous active grants | 20 |
+| Maximum grant create-ops per rolling hour | 50 |
+
+Revoking a grant decrements the per-hour counter. A `grant → revoke → grant` cycle does not exhaust the hourly cap. Purge (expiry) does not decrement — that path is deliberately not a capacity return.
+
+---
+
+## revoke
+
+Revoke an active grant by id, or by path when the path matches exactly one active grant.
+
+```bash
+makakoo perms revoke <grant-id>
+makakoo perms revoke --path <path>
+makakoo perms revoke --path last
+```
+
+<ParamField path="grant-id" type="string">
+  Grant id as printed by `perms grant` or `perms list`. Example: `g_20260421_abcd1234`.
+</ParamField>
+
+<ParamField path="--path" type="string">
+  Revoke by scope path. Must match exactly one active grant. The alias `last` (or `latest`) resolves to the most-recently-created active grant — useful for undoing a just-issued grant.
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Emit a JSON confirmation envelope.
+</ParamField>
+
+<Note>
+The CLI (`plugin=cli`) is on the admin bypass list and can revoke any grant. Cross-plugin revokes are refused — a conversational plugin can only revoke grants it originally issued. Refusals emit an audit entry with `correlation_id="reason:not_owner"`.
+</Note>
+
+---
+
+## purge
+
+Drop every grant whose expiry timestamp has passed. SANCHO runs `perms_purge_tick` every 900 seconds automatically — you rarely need to call this manually.
+
+```bash
+makakoo perms purge [--json]
+```
+
+<ParamField path="--json" type="boolean" default="false">
+  Emit JSON with the list of removed grant ids.
+</ParamField>
+
+---
+
+## audit
+
+Query `$MAKAKOO_HOME/logs/audit.jsonl` for perms subsystem events.
+
+```bash
+makakoo perms audit [--since <duration>] [--plugin <name>] [--grant <id>] [--json]
+```
+
+<ParamField path="--since" type="string">
+  Only include entries newer than this duration. Examples: `10m`, `1h`, `2d`.
+</ParamField>
+
+<ParamField path="--plugin" type="string">
+  Filter by caller attribution string (e.g. `cli`, `claude-code`, `harveychat`).
+</ParamField>
+
+<ParamField path="--grant" type="string">
+  Filter to entries for one specific grant id.
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Emit raw JSONL entries instead of the rendered table.
+</ParamField>
+
+### Refusal taxonomy
+
+Every grant refusal lands in the audit log with a `correlation_id` tag:
+
+| `correlation_id` | Meaning |
+|---|---|
+| `reason:too_broad` | Scope refused (`/`, `~`, bare `*`/`**`, etc.) |
+| `reason:bad_duration` | Duration outside `30m\|1h\|24h\|7d\|permanent` |
+| `reason:permanent_outside_home_unconfirmed` | `permanent` outside `$MAKAKOO_HOME` without `--yes-really` |
+| `reason:rate_limit_active` | 20 simultaneous active grants cap hit |
+| `reason:rate_limit_hourly` | 50/hour create cap hit |
+| `reason:missing_origin_turn_id` | Conversational tool called without a host turn-id (prompt-injection signature) |
+| `reason:not_owner` | Revoke refused — caller's plugin doesn't match the grant's owner |
+| `reason:expired` | Grant rolled off by purge |
+
+### Examples
+
+```bash
+# All grant and revoke events in the last hour
+makakoo perms audit --since 1h
+
+# Only events from Claude Code
+makakoo perms audit --since 24h --plugin claude-code
+
+# Forensic: why did a grant get refused?
+makakoo perms audit --since 10m --json | jq 'select(.result == "denied")'
+```
+
+---
+
+## show
+
+Print the full record for one grant by id.
+
+```bash
+makakoo perms show <grant-id> [--json]
+```
+
+<ParamField path="grant-id" type="string" required>
+  Grant id as printed by `perms grant` or `perms list`.
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Emit the grant record as JSON.
+</ParamField>
+
+---
+
+## Workflow examples
+
+```bash
+# Show active grants and baseline
+makakoo perms list
+
+# Grant 1h write access, check it was created
+makakoo perms grant ~/work/project/ --for 1h --label "sprint session"
+makakoo perms list
+
+# Revoke by id
+makakoo perms revoke g_20260421_abcd1234
+
+# Revoke the most recent grant
+makakoo perms revoke --path last
+
+# Grant permanent access to a stable data directory
+makakoo perms grant ~/MAKAKOO/notes/ --for permanent
+
+# Clean up expired grants immediately
+makakoo perms purge
+
+# Review all activity in the last day
+makakoo perms audit --since 24h
+```

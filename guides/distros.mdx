@@ -1,0 +1,230 @@
+---
+title: "Distros: curated plugin bundles for Makakoo"
+description: "Makakoo distros are curated plugin bundles. Compare minimal, core, sebastian, creator, and trader — then install, compose, or save your own."
+---
+
+A distro is a named, version-pinned bundle of plugins designed for a particular use case. Instead of installing plugins one by one, you pick a distro and get a coherent set — with blake3-pinned versions for reproducibility. Distros compose: each one can declare `include` references to other distros, so `core` extends `minimal`, and `sebastian` extends `core`.
+
+## Available distros
+
+| Distro | Display name | Purpose |
+|--------|-------------|---------|
+| `minimal` | Makakoo Minimal | Kernel-only install. Native Rust tasks only. Zero Python. |
+| `core` | Makakoo Core | Default for most users. Adds browser harness, LLM gateway, watchdogs, SANCHO tasks, and memory consolidation. |
+| `sebastian` | Sebastian Edition | Sebastian's daily-driver dogfood stack. Adds skill migrations from harvey-os on top of core. |
+| `creator` | Makakoo Creator Edition | For writers, streamers, and artists. Brain-centric authoring and publishing loops. |
+| `trader` | Makakoo Trader Edition | For market-facing autonomous agents. Adds watchdog and observability plugins for 24/7 trading loops. |
+
+## What each distro includes
+
+<AccordionGroup>
+
+  <Accordion title="minimal — kernel only">
+    The bare-bones install. Runs the native Rust SANCHO tasks and nothing else. No Python, no Python plugins. Every other distro includes `minimal.toml`.
+
+    ```toml
+    [distro]
+    name = "minimal"
+    display_name = "Makakoo Minimal"
+    version = "0.1.0"
+    description = "Kernel-only install. Runs the native Rust tasks. Zero Python."
+
+    [kernel]
+    version = "^0.1"
+
+    [plugins]
+    # No plugins — just the kernel's native handlers.
+    ```
+
+    **Best for:** testing, disk-constrained environments, or as a base for a fully custom plugin set.
+  </Accordion>
+
+  <Accordion title="core — the default">
+    The standard experience for most users. Extends `minimal` with the browser harness, LLM gateway, watchdogs, auto-update tasks, memory consolidation, and the Mascot GYM self-improvement flywheel.
+
+    ```toml
+    [distro]
+    name = "core"
+    display_name = "Makakoo Core"
+    version = "0.1.0"
+    description = "Essential plugins for a usable Harvey, including shared S3 storage."
+
+    include = ["minimal.toml"]
+
+    [plugins]
+    "lib-hte"                          = { version = "*" }
+    "lib-agent-loop"                   = { version = "*" }
+    "lib-harvey-core"                  = { version = "*" }
+    "agent-browser-harness"            = { version = "*" }
+    "bootstrap-fragment-browser-harness" = { version = "*" }
+    "sancho-task-plugin-update-check"  = { version = "*" }
+    "sancho-task-cli-pi"               = { version = "*" }
+    "sancho-task-cli-ghostty"          = { version = "*" }
+    "sancho-task-cli-switchailocal"    = { version = "*" }
+    "agent-switchailocal"              = { version = "*" }
+    "watchdog-switchailocal"           = { version = "*" }
+    "agent-pg-watchdog"                = { version = "*" }
+    "watchdog-infect"                  = { version = "*" }
+    "monitor-hackernews"               = { version = "*" }
+    "mascot-gym"                       = { version = "*" }
+    "agent-dreams"                     = { version = "*" }
+    "garage-store"                     = { version = "*" }
+    ```
+
+    **Best for:** general software development, everyday productivity, most new users.
+  </Accordion>
+
+  <Accordion title="sebastian — dogfood edition">
+    Sebastian's personal daily-driver stack. Extends `core` with skill migrations from the harvey-os legacy tree: system wizards (network, files, health, security), the cross-CLI canary probe, the OpenClaw bridge, the dev orchestrator, loop watchdogs, and FTS5 Brain search.
+
+    ```toml
+    [distro]
+    name = "sebastian"
+    display_name = "Sebastian Edition (Harvey, the full rig)"
+    version = "0.1.0"
+    description = "Harvey's daily-driver install — core + migrated harvey-os skills."
+
+    include = ["core.toml"]
+
+    [plugins]
+    "skill-meta-caveman-voice"              = { version = "*" }
+    "skill-system-network"                  = { version = "*" }
+    "skill-system-files"                    = { version = "*" }
+    "skill-system-health"                   = { version = "*" }
+    "skill-system-security"                 = { version = "*" }
+    "skill-meta-canary"                     = { version = "*" }
+    "skill-infrastructure-openclaw-bridge"  = { version = "*" }
+    "skill-dev-dev-orchestrator"            = { version = "*" }
+    "skill-meta-loops"                      = { version = "*" }
+    "skill-productivity-fts5-search"        = { version = "*" }
+    ```
+
+    Persona locked to: Harvey (voice=caveman, pronoun=he/him).
+
+    **Best for:** power users who want the full skill migration set, researchers, and AI/ML practitioners.
+  </Accordion>
+
+  <Accordion title="creator — for content makers">
+    Makakoo for writers, streamers, and artists whose primary output is content rather than code. Extends `core` with FTS5 Brain search, the session loop watchdog, the cross-CLI canary probe, and the caveman-voice token-savings layer.
+
+    ```toml
+    [distro]
+    name = "creator"
+    display_name = "Makakoo Creator Edition"
+    version = "0.1.0"
+    description = "Makakoo for content creators — writers, streamers, artists."
+
+    include = ["core.toml"]
+
+    [plugins]
+    "skill-productivity-fts5-search" = { version = "*" }
+    "skill-meta-canary"              = { version = "*" }
+    "skill-meta-loops"               = { version = "*" }
+    "skill-meta-caveman-voice"       = { version = "*" }
+    ```
+
+    **Best for:** writers, streamers, content creators, and social media managers.
+  </Accordion>
+
+  <Accordion title="trader — for market-facing agents">
+    Makakoo for people running market-facing agents: arbitrage, prediction markets, and event-driven trading. Extends `core` with loop watchdogs, the canary probe, FTS5 Brain search (arb opportunities leave a trail), and the OpenClaw bridge for deep research delegation.
+
+    ```toml
+    [distro]
+    name = "trader"
+    display_name = "Makakoo Trader Edition"
+    version = "0.1.0"
+    description = "Makakoo for market-facing autonomous agents — arbitrage, prediction markets."
+
+    include = ["core.toml"]
+
+    [plugins]
+    "skill-meta-loops"                      = { version = "*" }
+    "skill-meta-canary"                     = { version = "*" }
+    "skill-productivity-fts5-search"        = { version = "*" }
+    "skill-infrastructure-openclaw-bridge"  = { version = "*" }
+    ```
+
+    **Best for:** day traders, quantitative researchers, and crypto traders running autonomous agents.
+  </Accordion>
+
+</AccordionGroup>
+
+## Installing a distro
+
+<Steps>
+
+  <Step title="Preview what will be installed">
+    Run `--dry-run` to see the full resolved plugin list before committing:
+
+    ```bash
+    makakoo distro install core --dry-run
+    ```
+  </Step>
+
+  <Step title="Install the distro">
+    ```bash
+    makakoo distro install core
+    ```
+
+    The command resolves `include` references, installs every plugin in the effective list, and writes `plugins.lock`.
+  </Step>
+
+  <Step title="Skip the confirmation prompt in CI">
+    Pass `--yes` to suppress the interactive confirmation:
+
+    ```bash
+    makakoo distro install creator --yes
+    ```
+  </Step>
+
+</Steps>
+
+## Listing distros
+
+```bash
+makakoo distro list
+```
+
+Output shows all shipped distros and which one is currently active:
+
+```
+Available distros:
+  minimal   — Kernel-only install. Runs the native Rust tasks. Zero Python.
+  core      — Essential plugins for a usable Harvey (default)
+  sebastian — Harvey's daily-driver install — core + migrated harvey-os skills
+  creator   — Makakoo for content creators
+  trader    — Makakoo for market-facing autonomous agents
+
+  Installed: core
+```
+
+## Saving your current setup
+
+Snapshot your live plugin set into a portable distro TOML file. Every enabled plugin is pinned to its exact version and blake3 hash:
+
+```bash
+makakoo distro save my-stack
+makakoo distro save my-stack --out ~/my-stack.toml   # explicit output path
+makakoo distro save my-stack --force                  # overwrite if it exists
+```
+
+Replay it on another machine:
+
+```bash
+makakoo distro install --from ~/my-stack.toml --yes
+```
+
+<Tip>
+  Disabled plugins are excluded from `distro save` by default so the distro replays only what was active. Add `--include-disabled` to capture everything on disk.
+</Tip>
+
+## Distro composability
+
+Every distro file can declare `include` references to other distros. Makakoo resolves the full dependency graph before installing. For example, `sebastian.toml` includes `core.toml`, which includes `minimal.toml` — installing `sebastian` brings in every plugin from all three:
+
+```toml
+include = ["core.toml"]
+```
+
+Run `makakoo distro install <name> --dry-run` at any time to see the fully resolved flat plugin list before committing.

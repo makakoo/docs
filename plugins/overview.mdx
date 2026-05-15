@@ -1,0 +1,144 @@
+---
+title: "Makakoo OS plugin system overview"
+description: "Makakoo OS uses a manifest-driven, capability-sandboxed plugin system. Extend the OS with 38 core plugins for agents, skills, scheduled tasks, and more."
+---
+
+Makakoo OS ships a manifest-driven plugin system where every extension — agents, skills, scheduled tasks, monitors, patterns, and mascots — is a directory containing a `plugin.toml` that declares its identity, source, required capabilities, and lifecycle entrypoints. The core runtime enforces those declarations at call time via a Unix socket capability sandbox, so even a compromised plugin can only access what its manifest grants.
+
+## How the plugin system works
+
+Each plugin runs as an isolated process. When the plugin calls a capability (read Brain, call an LLM, make an HTTP request), the request travels over a per-plugin Unix socket to the Makakoo core, which checks the declared grants and either allows or denies the call. Denied calls are written to the audit log at `~/.makakoo/logs/audit.jsonl`.
+
+```
+Plugin process
+  └─▶ Unix socket ($MAKAKOO_HOME/run/plugins/<name>.sock)
+        └─▶ Makakoo core: checks grants
+              ├─ grant in manifest → ALLOW + execute
+              └─ not in manifest   → DENY + audit log
+```
+
+Plugins are written in Python or Rust. Python plugins use a self-contained `.venv` bootstrapped by `makakoo plugin internal venv-bootstrap` during install. Communication between your plugin code and Makakoo core uses the `makakoo` Python client or raw JSON-RPC over the socket.
+
+## Plugin kinds
+
+| Kind | Purpose | Examples |
+| --- | --- | --- |
+| `agent` | Long-running autonomous workers | `agent-harveychat`, `agent-arbitrage-agent` |
+| `skill` | Reusable AI workflows and prompt packages | `skill-research-arxiv`, `skill-dev-ship` |
+| `sancho-task` | Scheduled recurring jobs managed by SANCHO | `sancho-task-daily-report`, `sancho-task-plugin-update-check` |
+| `watchdog` | Service health monitors | `watchdog-switchailocal`, `watchdog-infect` |
+| `monitor` | Stream monitors (feeds, news, prices) | `monitor-hackernews` |
+| `pattern` | One-shot LLM dispatch templates | `pattern-summarize`, `pattern-extract-wisdom` |
+| `lib` | Shared code libraries used by other plugins | `lib-harvey-core`, `lib-makakoo-client` |
+| `mascot` | Persona modules (voice, character, behavior) | `mascot-olibia`, `mascot-gym` |
+| `bootstrap-fragment` | Pieces woven into CLI global bootstrap at infect time | `bootstrap-fragment-browser-harness` |
+
+## Core plugin catalog
+
+Makakoo ships 38+ core plugins across seven categories, installable with `--core`.
+
+<CardGroup cols={2}>
+  <Card title="Agents" icon="robot">
+    Long-running autonomous workers: `agent-arbitrage-agent`, `agent-browser-harness`, `agent-career-manager`, `agent-harveychat`, `agent-dreams`, `agent-knowledge-extractor`, `agent-marketing-blog`, `agent-marketing-linkedin`, `agent-marketing-twitter`, `agent-multimodal-knowledge`, `agent-pi`, `agent-switchailocal`
+  </Card>
+  <Card title="Skills (200+)" icon="bolt">
+    Reusable AI workflows covering AI/ML, development, browser QA, productivity, research, infrastructure, creative, career, lifestyle, meta, orchestration, blockchain, and system domains. See the [Skills Inventory](/plugins/skills-inventory) for the full list.
+  </Card>
+  <Card title="SANCHO tasks" icon="clock">
+    Scheduled jobs: `sancho-task-daily-report`, `sancho-task-knowledge-pipeline`, `sancho-task-plugin-update-check`, `sancho-task-brain-dashboard`, `sancho-task-inbox-pipeline`, `sancho-task-crm-pipeline`, `sancho-task-freelance-office-secretary`, `sancho-task-pi-session-sync`, `sancho-task-cli-switchailocal`
+  </Card>
+  <Card title="Watchdogs, monitors & patterns" icon="eye">
+    Watchdogs: `watchdog-postgres`, `watchdog-switchailocal`, `watchdog-infect`. Monitors: `monitor-hackernews`. Patterns: `pattern-summarize`, `pattern-extract-wisdom`, `pattern-deep-audit`, `pattern-lope-question`, `pattern-wiki-page`, `pattern-journal-entry`, and more.
+  </Card>
+</CardGroup>
+
+## Basic plugin commands
+
+List installed plugins and inspect a specific plugin:
+
+```bash
+# List all installed plugins
+makakoo plugin list
+
+# List with JSON output
+makakoo plugin list --json
+
+# Show parsed manifest + lock entry for a plugin
+makakoo plugin info skill-research-arxiv
+```
+
+Install from the core library, a git URL, or a local directory:
+
+```bash
+# Install a core plugin by name
+makakoo plugin install skill-research-arxiv --core
+
+# Install a pinned git release
+makakoo plugin install git+https://github.com/user/my-plugin@v1.0.0
+
+# Install from a local directory
+makakoo plugin install ./my-plugin
+```
+
+Enable, disable, update, and remove:
+
+```bash
+makakoo plugin disable skill-research-arxiv
+makakoo plugin enable  skill-research-arxiv
+makakoo plugin update  skill-research-arxiv
+makakoo plugin uninstall skill-research-arxiv
+```
+
+Check for available updates without touching disk:
+
+```bash
+makakoo plugin outdated
+makakoo plugin update --all
+```
+
+## Capability grants
+
+Every plugin declares exactly which capabilities it needs in `plugin.toml`. The runtime denies anything not listed.
+
+```toml
+[capabilities]
+grants = [
+  "brain/read",                               # read journal entries
+  "brain/write",                              # write to journals
+  "llm/chat",                                 # call the LLM gateway
+  "net/http:https://clob.polymarket.com/*",   # HTTP to one domain
+  "secrets/read:POLYMARKET_API_KEY",          # one named secret
+  "state/plugin",                             # plugin's own state dir
+]
+```
+
+Available capability verbs:
+
+| Verb | Scope parameter | Purpose |
+| --- | --- | --- |
+| `brain/read` | — | Read Brain journals and pages |
+| `brain/write` | — | Write to Brain journals |
+| `llm/chat` | model (optional) | Call the LLM gateway for chat |
+| `llm/embed` | model (optional) | Request vector embeddings |
+| `net/http` | URL glob | Outbound HTTP to matching URLs |
+| `secrets/read` | key name | Read one named secret from keyring |
+| `state/plugin` | — | Read/write own state directory |
+| `fs/read` | path glob | Read files matching a path pattern |
+| `fs/write` | path glob | Write files matching a path pattern |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Write a plugin" icon="pen" href="/plugins/writing-a-plugin">
+    Create a plugin.toml, add an entrypoint, and publish to GitHub.
+  </Card>
+  <Card title="Skills inventory" icon="list" href="/plugins/skills-inventory">
+    Browse all 200+ built-in AI skills organized by category.
+  </Card>
+  <Card title="Adapters" icon="plug" href="/plugins/adapters">
+    Connect external AI endpoints via the adapter registry.
+  </Card>
+  <Card title="Capability sandbox" icon="shield" href="/concepts/capability-sandbox">
+    Deep dive into how the grant model enforces isolation.
+  </Card>
+</CardGroup>

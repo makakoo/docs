@@ -1,0 +1,326 @@
+---
+title: "Fix common Makakoo OS errors and issues"
+description: "Step-by-step fixes for common Makakoo OS problems: PATH errors, daemon failures, infect drift, Brain search issues, plugin failures, and permission errors."
+---
+
+When something goes wrong, start with two commands: `makakoo daemon status` shows whether the background daemon is running, and `makakoo sancho status` confirms whether SANCHO tasks are registered and healthy. Use `makakoo infect --verify` to check CLI infection state. Use the categories below to isolate specific problems.
+
+<AccordionGroup>
+
+  <Accordion title="Command not found / PATH issues">
+
+    **Symptom:** Running `makakoo` returns `command not found: makakoo` or `makakoo: command not found`.
+
+    **Cause:** The installer places the binary in `~/.local/bin/`, which is not on every shell's default `$PATH`.
+
+    <Tip>
+      Run `which makakoo` first. If it returns a path, the binary is reachable and the problem is elsewhere.
+    </Tip>
+
+    **Fix — reload the shell after install:**
+
+    ```bash
+    exec $SHELL
+    ```
+
+    If that doesn't work, add `~/.local/bin/` to your PATH permanently:
+
+    ```bash
+    # zsh (default on macOS 10.15+)
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
+
+    ```bash
+    # bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+
+    Then verify:
+
+    ```bash
+    which makakoo
+    makakoo --version
+    ```
+
+    **Docs MCP variant:** Some CLIs (Claude Code, Cursor) launch from GUI shells that have a different `PATH` than your terminal. If `makakoo docs-mcp` is not appearing in the CLI's tool list, use the absolute path in the MCP config:
+
+    ```json
+    { "makakoo-docs": { "command": "/Users/you/.local/bin/makakoo", "args": ["docs-mcp", "--stdio"] } }
+    ```
+
+  </Accordion>
+
+  <Accordion title="Daemon not starting">
+
+    **Symptoms:**
+    - `makakoo status` shows `daemon: not running`
+    - `makakoo daemon status` prints `not installed`
+    - Brain search, SANCHO tasks, or plugin tool calls are unresponsive
+
+    **Quick fix — restart the daemon:**
+
+    ```bash
+    makakoo daemon status
+    makakoo daemon install   # idempotent — safe to re-run
+    ```
+
+    **macOS: background item approval required**
+
+    On macOS, the LaunchAgent plist is written but `launchctl load` is blocked by Background Task Management the first time. You must approve it manually:
+
+    1. Open **System Settings → General → Login Items & Extensions**
+    2. Find **Makakoo** in the "Allow in the Background" section and toggle it on
+    3. Re-run `makakoo daemon install` — it is idempotent and will reload the plist
+
+    <Note>
+      This is a one-time approval. Future installs and upgrades are silent.
+    </Note>
+
+    **macOS — force-reload via launchctl:**
+
+    ```bash
+    launchctl unload ~/Library/LaunchAgents/com.makakoo.daemon.plist
+    launchctl load  ~/Library/LaunchAgents/com.makakoo.daemon.plist
+    ```
+
+    **Linux — restart the systemd user unit:**
+
+    ```bash
+    systemctl --user restart makakoo
+    systemctl --user status makakoo
+    ```
+
+    **Daemon stopped after sleep/wake:** macOS occasionally kills LaunchAgents after a sleep/wake cycle. Run `makakoo daemon install` to reload.
+
+    **Check the daemon log for errors:**
+
+    ```bash
+    makakoo daemon logs -l 100
+    # Log file: ~/.makakoo/logs/makakoo.log
+    ```
+
+  </Accordion>
+
+  <Accordion title="Infect issues">
+
+    **Symptom 1: CLI not detected**
+
+    Your AI CLI is installed but `makakoo status` doesn't list it as infected.
+
+    ```bash
+    makakoo infect --verify    # check for drift
+    makakoo infect             # rewrite if drifted, then close and reopen the CLI
+    ```
+
+    **Symptom 2: Bootstrap block missing after infect ran**
+
+    The CLI's global instructions file was edited after infect ran, or the CLI was open when infect ran. The fix is the same:
+
+    ```bash
+    makakoo infect --verify
+    makakoo infect
+    # Close and reopen your AI CLI session
+    ```
+
+    **Symptom 3: Bootstrap block written twice → latency**
+
+    If your CLI session feels slower, run `makakoo infect --verify`. Sometimes the bootstrap block gets written twice (most commonly after an upgrade without `--reinfect`). Re-running infect cleans up the duplicate:
+
+    ```bash
+    makakoo infect --verify
+    makakoo infect
+    ```
+
+    The bootstrap block adds ~5 KB (~2 000 tokens) to each new session's system prompt. With a single block, most providers cache it after the first turn so latency returns to baseline.
+
+    **Symptom 4: `refusing to infect $HOME`**
+
+    `makakoo infect` is scoped to project directories. Run it from inside a project subdirectory, not from `$HOME` directly.
+
+    **Diagnostic command:**
+
+    ```bash
+    makakoo infect --verify
+    ```
+
+  </Accordion>
+
+  <Accordion title="Brain / search issues">
+
+    **Symptom: `makakoo search` returns empty results for content you know is there**
+
+    The FTS5 index drifted from the files on disk. Force a full rebuild:
+
+    ```bash
+    makakoo sync --force
+    ```
+
+    **Symptom: `makakoo sync` reports `0 new` after writing a journal entry**
+
+    Verify the file actually saved and that the line starts with `- `:
+
+    ```bash
+    grep "your line" ~/MAKAKOO/data/Brain/journals/*.md
+    ```
+
+    If the grep returns nothing, re-open the editor, check the formatting, save again, and rerun `makakoo sync`.
+
+    **Symptom: Brain searches return stale results after an upgrade**
+
+    A schema migration may have reset `plugins.lock`. Re-register plugins and restart:
+
+    ```bash
+    makakoo plugin sync
+    makakoo daemon uninstall && makakoo daemon install
+    ```
+
+    **Log locations for Brain issues:**
+
+    - Daemon log: `$MAKAKOO_HOME/logs/daemon.log`
+    - Brain journals: `~/MAKAKOO/data/Brain/journals/`
+
+  </Accordion>
+
+  <Accordion title="Plugin install failures">
+
+    **Error: `can't find plugins-core/`**
+
+    You ran `makakoo plugin install --core <name>` outside a repo checkout. Fix:
+
+    ```bash
+    cd ~/makakoo-os && makakoo plugin install --core <name>
+    ```
+
+    Or set the environment variable:
+
+    ```bash
+    export MAKAKOO_PLUGINS_CORE=/absolute/path/to/plugins-core
+    ```
+
+    **Error: `blake3 mismatch`**
+
+    The plugin source doesn't match the pinned hash — usually because you pulled a newer version. Accept the new hash:
+
+    ```bash
+    makakoo plugin install --core <name> --blake3 <new-hash-from-error-msg>
+    ```
+
+    **Error: `sha256 required for tarball sources`**
+
+    Remote tarballs require a checksum flag to prevent silent supply-chain swaps:
+
+    ```bash
+    makakoo plugin install https://... --sha256 <expected-hash>
+    ```
+
+    **Error: `staging error: target plugin dir already exists`**
+
+    The plugin is already installed. Either uninstall first, or update it:
+
+    ```bash
+    makakoo plugin update <name>
+    ```
+
+    **Warning: `skipping plugin — manifest failed to parse`**
+
+    One plugin has a malformed `plugin.toml` (for example, `language = "markdown"` instead of a valid language). The rest of your plugins are unaffected. Edit the offending manifest to fix it.
+
+    **Python / venv errors**
+
+    Plugin install scripts sometimes fail on a missing system dependency (Python, Node, git, curl). Check the plugin's install log:
+
+    ```bash
+    tail -50 ~/MAKAKOO/data/logs/plugin-install-<name>.log
+    ```
+
+    Install the missing dependency and re-run the install.
+
+  </Accordion>
+
+  <Accordion title="Permission denied errors">
+
+    **Symptom: file operation fails with `Permission denied`**
+
+    The default write-sandbox covers only `~/MAKAKOO/data/reports/`, `~/MAKAKOO/data/drafts/`, `~/MAKAKOO/tmp/`, and `/tmp/`. Any path outside these requires a grant:
+
+    ```bash
+    makakoo perms grant ~/Projects/my-app/ --for 1h
+    makakoo perms list      # confirm grant is active
+    ```
+
+    **Broad scopes are refused regardless** — passing `/`, `~`, `*`, or `**` always fails. Grant a specific subdirectory.
+
+    <Warning>
+      Grant scopes are intentionally narrow. If an agent requests write access to a path you didn't expect, inspect the request before approving.
+    </Warning>
+
+    **Symptom: `error: load/create signing key: <os-error>`**
+
+    Octopus bootstrap couldn't write the signing key. The directory needs correct permissions:
+
+    ```bash
+    ls -la ~/MAKAKOO/config/peers/
+    mkdir -p ~/MAKAKOO/config/peers
+    chmod 700 ~/MAKAKOO/config/peers
+    ```
+
+    **Symptom: `failed to write bootstrap cache`**
+
+    The infect cache path isn't writable:
+
+    ```bash
+    ls -la ~/MAKAKOO/cache/infect/
+    # Directory must be writable by your user
+    ```
+
+  </Accordion>
+
+  <Accordion title="Windows Developer Mode requirement">
+
+    **Symptom:** Install fails or plugins behave unexpectedly on Windows.
+
+    Makakoo requires **Developer Mode** on Windows to create symbolic links, which the plugin system needs.
+
+    **How to enable Developer Mode:**
+
+    1. Open **Settings**
+    2. Go to **Privacy & security → For developers**
+    3. Toggle **Developer Mode** on
+    4. Re-run the install script
+
+    ```powershell
+    iwr -UseBasicParsing https://makakoo.com/install.ps1 | iex
+    ```
+
+    <Note>
+      No admin or sudo is needed for Makakoo itself. Developer Mode is the only Windows-specific prerequisite.
+    </Note>
+
+  </Accordion>
+
+</AccordionGroup>
+
+## Diagnostic commands reference
+
+Run these commands to quickly assess system health:
+
+```bash
+makakoo version               # confirm version and persona loaded
+makakoo daemon status         # daemon: running / installed / not installed + PID
+makakoo sancho status         # SANCHO tasks: registered and last-run state
+makakoo infect --verify       # check whether the bootstrap block in each CLI is current
+makakoo daemon logs -l 100    # last 100 lines of the daemon log
+makakoo memory stats          # Brain FTS5 index health and stats
+makakoo adapter status        # registered adapters and last-ok timestamps
+```
+
+**Log locations:**
+
+| Log | Path |
+|---|---|
+| Daemon log | `$MAKAKOO_HOME/logs/daemon.log` |
+| Brain journals | `~/MAKAKOO/data/Brain/journals/` |
+| Plugin install logs | `~/MAKAKOO/data/logs/plugin-install-<name>.log` |
+| Agent logs | `~/MAKAKOO/data/agents/<slot>/agent.log` |

@@ -1,0 +1,123 @@
+---
+title: "makakoo sancho: proactive background task scheduler"
+description: "Reference for makakoo sancho status and sancho tick — inspect registered tasks, last-run times, and manually trigger the SANCHO task engine."
+---
+
+SANCHO is the proactive task engine that runs inside the Makakoo daemon. Plugins register tasks — Python callables with a cadence — into SANCHO at daemon startup. SANCHO fires each task on its schedule and writes a journal line per run. Memory consolidation, Brain sync, perms expiry cleanup, and plugin tasks are all managed by SANCHO.
+
+`makakoo sancho` exposes two subcommands: `status` to check what tasks are registered and how they last ran, and `tick` to force a run immediately instead of waiting for the next scheduled window.
+
+---
+
+## makakoo sancho status
+
+Print a table of every registered SANCHO task: name, cadence, last-run timestamp, and last result.
+
+```bash
+makakoo sancho status
+```
+
+### Expected output
+
+```
+TASK                          CADENCE   LAST RUN         RESULT
+perms_purge_tick              15m       2m ago           ok
+dream                         4h        2h ago           ok
+daily_briefing                8h        1h ago           ok
+memory_consolidation          daily     5h ago           ok
+superbrain_sync               1h        30m ago          ok
+wiki_lint                     daily     6h ago           ok
+dynamic_checklist             6h        3h ago           ok
+gym_classify                  1h        45m ago          ok
+pg_watchdog                   15m       5m ago           ok
+arbitrage_tick                5m        2m ago           ok
+hackernews_monitor            30m       18m ago          ok
+```
+
+Result values:
+
+| Value | Meaning |
+|---|---|
+| `ok` | Task ran successfully within its last window. |
+| `failed` | Task threw an exception. Full traceback is in the daemon log. |
+| `skipped` | Task ran within its cadence window and was not re-run. |
+| `never` | Task has not run since daemon start. |
+
+---
+
+## makakoo sancho tick
+
+Run every eligible task exactly once right now. Returns when all tasks have completed or been skipped.
+
+```bash
+makakoo sancho tick
+```
+
+A task is eligible for a tick when its last-run timestamp is older than its cadence, or when it has never run. Tasks that already ran within their cadence window are counted as `skipped`. `sancho tick` does not bypass cadence guards — it runs the eligible set immediately rather than waiting for the daemon timer.
+
+<Tip>
+Use `makakoo sancho tick` right after installing a new plugin whose SANCHO tasks you want to run immediately, rather than waiting for the next scheduled window.
+</Tip>
+
+---
+
+## Relationship to the daemon
+
+SANCHO runs exclusively inside the daemon process. If the daemon is not running, no SANCHO tasks execute on schedule. Always verify the daemon is up before diagnosing SANCHO issues:
+
+```bash
+makakoo daemon status
+makakoo sancho status
+```
+
+A daemon restart is required for the task registry to pick up newly installed or newly enabled plugins:
+
+```bash
+makakoo daemon uninstall
+makakoo daemon install
+```
+
+---
+
+## Log location
+
+SANCHO writes task output and exceptions to the main daemon log:
+
+```
+$MAKAKOO_HOME/logs/daemon.log
+```
+
+When a task shows `failed` in `sancho status`, tail the log and search for the task name:
+
+```bash
+makakoo daemon logs -l 100
+```
+
+The most common cause of a failed task is a missing Python dependency introduced by a plugin update. Check the recorded entrypoint with `makakoo plugin info <plugin-name>` to verify the file still exists.
+
+---
+
+## Registering tasks (plugin authors)
+
+Add a `[[sancho_tasks]]` entry to your plugin's `plugin.toml`:
+
+```toml
+[[sancho_tasks]]
+name   = "my_plugin_tick"
+fn     = "my_plugin.tasks:run_tick"
+every  = "30m"
+```
+
+The daemon picks up new task registrations on the next restart.
+
+<ParamField path="name" type="string" required>
+  Unique task name. Shown in `makakoo sancho status`.
+</ParamField>
+
+<ParamField path="fn" type="string" required>
+  Python callable in `module.path:function_name` form.
+</ParamField>
+
+<ParamField path="every" type="string" required>
+  Cadence string. Examples: `15m`, `2h`, `daily`, `weekly`.
+</ParamField>

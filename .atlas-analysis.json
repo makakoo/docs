@@ -1,0 +1,107 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Makakoo OS",
+  "projectDescription": "Autonomous cognitive extension that gives every AI CLI on your machine a shared persistent brain — local-first, Pure Rust, MIT licensed.",
+  "theme": "palm",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/brain-and-memory",
+              "concepts/infect-and-ai-clis",
+              "concepts/sancho-scheduler",
+              "concepts/capability-sandbox"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/use-cases",
+              "guides/setup-wizard",
+              "guides/distros",
+              "guides/upgrade"
+            ]
+          },
+          {
+            "group": "Command Reference",
+            "pages": [
+              "commands/overview",
+              "commands/search-and-query",
+              "commands/infect-and-uninfect",
+              "commands/plugin",
+              "commands/sancho",
+              "commands/perms",
+              "commands/daemon"
+            ]
+          },
+          {
+            "group": "Plugins & Adapters",
+            "pages": [
+              "plugins/overview",
+              "plugins/writing-a-plugin",
+              "plugins/adapters",
+              "plugins/skills-inventory"
+            ]
+          },
+          {
+            "group": "Troubleshooting & FAQ",
+            "pages": [
+              "troubleshooting/common-issues",
+              "troubleshooting/faq",
+              "troubleshooting/uninstall"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Persistent shared Brain (Logseq-backed markdown journals + pages) accessible by all AI CLIs",
+    "Infect any AI CLI (Claude Code, Gemini CLI, Codex, OpenCode, Vibe, Cursor, Qwen, Kimi, pi) with a shared bootstrap block",
+    "Superbrain search — FTS5 + vector embeddings + LLM synthesis for natural-language queries",
+    "SANCHO proactive task engine — runs scheduled cognitive tasks (dream, briefing, memory sync) while you sleep",
+    "Capability-sandboxed plugin system with Unix socket IPC, PID verification, and per-plugin manifest grants",
+    "38 built-in plugins covering AI/ML, productivity, research, dev tools, lifestyle, and creative workflows",
+    "5 curated distros (minimal, core, sebastian, creator, trader) for different user profiles",
+    "Three-layer write-permission model with runtime user grants and full audit logging",
+    "MCP stdio server with 40+ tools for direct AI tool use",
+    "Cross-platform: macOS, Linux, Windows — one-liner install on all three"
+  ],
+  "publicApiSurface": [
+    "makakoo search <query>",
+    "makakoo query <question>",
+    "makakoo infect [--global] [--local] [--verify] [--dry-run]",
+    "makakoo uninfect",
+    "makakoo plugin install|list|info|enable|disable|update|uninstall",
+    "makakoo distro list|install|save",
+    "makakoo sancho status|tick",
+    "makakoo perms grant|revoke|list|audit",
+    "makakoo daemon install|uninstall|status|logs",
+    "makakoo setup [section]",
+    "makakoo install [--distro] [--no-setup]",
+    "makakoo upgrade [--dry-run] [--reinfect]",
+    "makakoo secret set|get|delete",
+    "makakoo adapter list|install|call|spec",
+    "makakoo agent start|stop|status|health|create|destroy",
+    "makakoo skill <name>",
+    "makakoo run <pattern>",
+    "makakoo sync [--embed]",
+    "makakoo mcp [--stdio]",
+    "makakoo completion <shell>"
+  ]
+}

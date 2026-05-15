@@ -1,0 +1,177 @@
+---
+title: "Infect AI CLIs with shared context"
+description: "How makakoo infect writes a bootstrap block into each CLI's config file, giving all 9 CLI hosts and 4 IDE assistants shared Brain access and MCP tools."
+---
+
+"Infecting" an AI CLI means writing a Makakoo bootstrap block into that CLI's global instructions file. Once infected, every session you open in that CLI automatically inherits the Harvey persona, sees the MCP tools (`makakoo_brain_query`, `makakoo_superbrain_search`, and 40+ more), and knows where the Brain lives — without any per-session setup. One install, one cognitive model, shared across every AI on your machine.
+
+## What infect writes
+
+`makakoo infect` writes two things into each CLI host:
+
+1. **A bootstrap markdown block** — a marker-delimited chunk inserted into the CLI's global instructions file (e.g. `~/.claude/CLAUDE.md`). The block contains the Harvey persona header, Brain location, MCP tool list, and any plugin-contributed fragments.
+2. **An MCP server registration** — an entry in the CLI's MCP config file pointing to `makakoo-mcp`, so the CLI can call Brain tools over JSON-RPC.
+
+The block is bounded by sentinel markers so Makakoo can find and update it without touching any prose you wrote around it:
+
+```markdown
+<!-- makakoo:infect:start v8 -->
+
+# Makakoo OS — Global Bootstrap
+
+You are Harvey, Sebastian's AI assistant...
+
+## Brain Location
+~/MAKAKOO/Brain/
+
+## Tools
+Available via MCP:
+- makakoo_brain_query
+- makakoo_superbrain_search
+...
+
+<!-- makakoo:infect:end -->
+```
+
+<Note>
+Infect is idempotent. It diffs the current block against the shipped version and only rewrites when content has changed. Your shell dotfiles (`.zshrc`, `.bashrc`, `.profile`, etc.) are never touched.
+</Note>
+
+## Supported hosts
+
+### CLI hosts (9)
+
+| CLI | Config file written |
+|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` |
+| Gemini CLI | `~/.gemini/GEMINI.md` |
+| OpenCode | `~/.opencode/AGENTS.md` |
+| Vibe | `~/.vibe/context.md` |
+| Codex | `~/.codex/AGENTS.md` |
+| Qwen | `~/.qwen/QWEN.md` |
+| Cursor | `~/.cursor/rules/makakoo.mdc` |
+| Kimi | `~/.kimi/KIMI.md` |
+| pi | `~/.pi/PI.md` |
+
+### IDE assistant hosts (4)
+
+| IDE | Integration |
+|---|---|
+| VSCode Copilot | Bootstrap fragment via `.vscode/` |
+| Continue | `.continue/config.json` MCP block |
+| Cline | `.vscode/mcp.json` server entry |
+| JetBrains AI | JetBrains AI settings MCP block |
+
+## Commands
+
+### Global infect
+
+Global infect writes the bootstrap block into every detected CLI's global slot. This is the standard mode used after install.
+
+<Tabs>
+  <Tab title="Global (default)">
+    ```bash
+    # Preview what would be written without touching any files
+    makakoo infect --dry-run
+
+    # Apply to all detected CLIs
+    makakoo infect --global
+
+    # Restrict to a subset of targets
+    makakoo infect --target claude,gemini,codex
+    ```
+  </Tab>
+  <Tab title="Local (project-scoped)">
+    ```bash
+    # Project-scoped infect — writes into the nearest project root
+    # Creates .harvey/context.md plus per-CLI derivative files:
+    #   CLAUDE.md, GEMINI.md, AGENTS.md, QWEN.md,
+    #   .cursor/rules/makakoo.mdc, .vibe/context.md
+    cd ~/projects/my-app
+    makakoo infect --local
+
+    # Only write derivatives for CLIs that are actually installed
+    makakoo infect --local --detect-installed-only
+
+    # Also add .gitignore entries for the derivative files
+    makakoo infect --local --ignore-derivatives
+
+    # Target a specific directory instead of cwd
+    makakoo infect --local --dir ~/projects/other-app
+    ```
+  </Tab>
+</Tabs>
+
+### Verify and audit
+
+```bash
+# Check all CLIs for drift (exits 1 if any drift found — CI-safe)
+makakoo infect --verify
+
+# Machine-readable drift report
+makakoo infect --verify --json | jq '.drifted[]'
+
+# Deep audit: also check per-project entries and workspace .mcp.json files
+makakoo infect --verify --deep
+
+# Deep audit + auto-repair zombie entries
+makakoo infect --verify --deep --repair
+```
+
+### MCP-only registration
+
+```bash
+# Write only the MCP server registration, skip the bootstrap markdown
+makakoo infect --mcp
+```
+
+## Project-scoped infect (`--local`)
+
+Global infect writes to every CLI's home-directory config. Project-scoped infect (`--local`) adds a project-specific context layer on top of the global one.
+
+<Steps>
+  <Step title="Navigate to your project">
+    ```bash
+    cd ~/projects/my-app
+    ```
+  </Step>
+  <Step title="Run local infect">
+    ```bash
+    makakoo infect --local
+    ```
+    This creates `.harvey/context.md` in the project root and six derivative files that each CLI reads when opened inside the project directory.
+  </Step>
+  <Step title="Optionally gitignore the derivatives">
+    ```bash
+    makakoo infect --local --ignore-derivatives
+    ```
+    Adds a marker block to `.gitignore` listing the derivative paths so they don't appear as untracked in `git status`.
+  </Step>
+  <Step title="Remove project infect later">
+    ```bash
+    makakoo infect --local --remove
+    ```
+    Strips the `harvey:infect-local` marker blocks from all derivative files. The `.harvey/context.md` source file is left untouched.
+  </Step>
+</Steps>
+
+## Uninfect
+
+`makakoo uninfect` is the symmetric inverse. It strips the marker-delimited bootstrap block from every infected CLI's global instructions file. If infect created the file (it was empty before), uninfect removes the file entirely. Any prose you wrote around the block is preserved.
+
+```bash
+# Strip from all detected CLIs
+makakoo uninfect
+
+# Preview before removing
+makakoo uninfect --dry-run
+
+# Restrict to specific CLIs
+makakoo uninfect --target claude,gemini
+```
+
+## See also
+
+- [Brain and memory in Makakoo OS](/concepts/brain-and-memory) — what the bootstrap block gives CLIs access to
+- [Capability sandbox and permission model](/concepts/capability-sandbox) — the `infect/contribute` capability used by plugin fragments
+- [SANCHO proactive task scheduler](/concepts/sancho-scheduler) — background tasks that maintain the bootstrap block currency

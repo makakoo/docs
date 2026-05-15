@@ -1,0 +1,200 @@
+---
+title: "makakoo infect and uninfect: AI CLI host bootstrap"
+description: "Reference for makakoo infect and makakoo uninfect — write or remove the Makakoo bootstrap block and MCP registration from every AI CLI host."
+---
+
+`makakoo infect` writes the Makakoo bootstrap block into every AI CLI host's global instructions file and registers the `harvey` MCP server in each CLI's MCP config. Once infected, any of those CLIs loads the Harvey persona and has access to all Makakoo tools automatically. `makakoo uninfect` is the symmetric inverse — it strips the marker-delimited block while preserving any prose you wrote outside it.
+
+Both commands are idempotent. Infect diffs the current block against the shipped version and only writes when the content has changed. Uninfect never touches content outside the `<!-- makakoo:infect:start -->` / `<!-- makakoo:infect:end -->` markers.
+
+---
+
+## CLI host config file paths
+
+| Target | Global instructions file | MCP config |
+|---|---|---|
+| `claude` | `~/.claude/CLAUDE.md` | `~/.claude/mcp.json` |
+| `gemini` | `~/.gemini/GEMINI.md` | `~/.gemini/mcp.json` |
+| `codex` | `~/.codex/AGENTS.md` | `~/.codex/mcp.json` |
+| `opencode` | `~/.opencode/AGENTS.md` | `~/.opencode/mcp.json` |
+| `vibe` | `~/.vibe/context.md` | `~/.vibe/mcp.json` |
+| `qwen` | `~/.qwen/QWEN.md` | `~/.qwen/mcp.json` |
+| `cursor` | `.cursor/rules/makakoo.mdc` | `.cursor/mcp.json` |
+
+---
+
+## makakoo infect
+
+```bash
+makakoo infect [flags]
+```
+
+Running `makakoo infect` with no flags is equivalent to `makakoo infect --global` — it writes the bootstrap block and MCP registration to all detected CLI hosts.
+
+### Flags
+
+<ParamField path="--global" type="boolean" default="false">
+  Explicit form of the default mode. Write the bootstrap markdown and register the `harvey` MCP server in every detected CLI host.
+</ParamField>
+
+<ParamField path="--mcp" type="boolean" default="false">
+  Write only the MCP server registration; skip the bootstrap markdown block. Use this to update a stale MCP entry without touching the instruction file.
+</ParamField>
+
+<ParamField path="--verify" type="boolean" default="false">
+  Audit-only mode. Report drift across all CLIs without writing anything. Exits with code `1` if any drift is detected — safe to use in CI pipelines.
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Emit the drift report as structured JSON on stdout. Only meaningful with `--verify`; produces an error otherwise.
+</ParamField>
+
+<ParamField path="--deep" type="boolean" default="false">
+  Extend `--verify` to also audit per-project entries (`~/.claude.json` `projects[*].mcpServers.harvey`), workspace-local `.mcp.json` files, and prunable `git worktree` records.
+</ParamField>
+
+<ParamField path="--repair" type="boolean" default="false">
+  With `--verify --deep`: apply canonical rewrites to every stale entry found. Without `--repair`, `--deep` is read-only.
+</ParamField>
+
+<ParamField path="--dry-run" type="boolean" default="false">
+  Preview what would be written without touching any files.
+</ParamField>
+
+<ParamField path="--target" type="string">
+  Restrict to a comma-separated subset of CLI targets. Valid values: `claude`, `gemini`, `codex`, `opencode`, `vibe`, `qwen`, `cursor`.
+</ParamField>
+
+<ParamField path="--local" type="boolean" default="false">
+  Project-scoped infect. Write `.harvey/context.md` plus per-CLI derivative files (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, `QWEN.md`, `.cursor/rules/makakoo.mdc`, `.vibe/context.md`) in the nearest project root. Mutually exclusive with `--global`, `--mcp`, and `--verify`.
+</ParamField>
+
+<ParamField path="--dir" type="string">
+  Target directory for `--local`. Defaults to the current directory; walks up the filesystem to find a `.git/` or `.harvey/` directory.
+</ParamField>
+
+<ParamField path="--detect-installed-only" type="boolean" default="false">
+  With `--local`: only write derivative files for CLIs that have a `~/.<cli>/` dotdir present on disk. By default all six derivatives are written.
+</ParamField>
+
+<ParamField path="--force-all" type="boolean" default="false">
+  With `--local`: write all six derivatives regardless of dotdir presence. Useful in CI to document intent explicitly.
+</ParamField>
+
+<ParamField path="--remove" type="boolean" default="false">
+  With `--local`: strip the `harvey:infect-local` marker blocks from derivatives, leaving the `.harvey/` source files untouched.
+</ParamField>
+
+<ParamField path="--ignore-derivatives" type="boolean" default="false">
+  With `--local`: upsert a marker block into the project root `.gitignore` listing the six derivative paths so they stop appearing as untracked in `git status`.
+</ParamField>
+
+### Typical workflows
+
+<Steps>
+  <Step title="Preview before writing">
+    ```bash
+    makakoo infect --dry-run
+    ```
+    Review which files would be created or updated without touching anything.
+  </Step>
+  <Step title="Initial infect">
+    ```bash
+    makakoo infect
+    ```
+    Writes the bootstrap block and MCP registration to all detected CLI hosts. Idempotent — safe to re-run.
+  </Step>
+  <Step title="Target specific CLIs">
+    ```bash
+    makakoo infect --target claude,gemini
+    ```
+    Restrict to two hosts when you don't want to touch the others.
+  </Step>
+  <Step title="CI drift check">
+    ```bash
+    # exits 0 when all CLIs are in sync, exits 1 on any drift
+    makakoo infect --verify
+
+    # machine-readable form for scripting
+    makakoo infect --verify --json | jq '.drifted[]'
+    ```
+  </Step>
+  <Step title="Project-local infect">
+    ```bash
+    cd ~/projects/my-app
+    makakoo infect --local
+    # add derivatives to .gitignore automatically
+    makakoo infect --local --ignore-derivatives
+    ```
+    Writes `.harvey/context.md` and per-CLI derivative files into the nearest project root.
+  </Step>
+  <Step title="Repair stale project entries">
+    ```bash
+    makakoo infect --verify --deep --repair
+    ```
+    Audits and rewrites stale per-project MCP entries and zombie worktree records.
+  </Step>
+</Steps>
+
+<Note>
+If `--verify` reports drift on every run even after a successful `infect`, you are likely running two different binary versions. Run `cargo install makakoo` to install a single consistent binary, then run `makakoo infect` once to stamp the current version.
+</Note>
+
+---
+
+## makakoo uninfect
+
+Strip the Makakoo bootstrap block from every AI CLI host's global instructions file. Any prose you wrote above or below the marker-delimited block is preserved exactly. If the file would be left empty after removal, it is deleted entirely.
+
+```bash
+makakoo uninfect [--target <list>] [--dry-run]
+```
+
+<Warning>
+`makakoo uninfect` does not remove the `harvey` MCP server registration. Use `makakoo mcp` or edit your CLI's MCP config directly to remove the `harvey` entry if needed.
+</Warning>
+
+### Flags
+
+<ParamField path="--target" type="string">
+  Restrict to a comma-separated subset of CLI targets. Valid values: `claude`, `gemini`, `codex`, `opencode`, `vibe`, `qwen`, `cursor`.
+</ParamField>
+
+<ParamField path="--dry-run" type="boolean" default="false">
+  Preview what would be removed without touching any files.
+</ParamField>
+
+### Examples
+
+<CodeGroup>
+
+```bash Preview removal
+makakoo uninfect --dry-run
+```
+
+```bash Remove from all CLIs
+makakoo uninfect
+```
+
+```bash Remove from specific CLIs
+makakoo uninfect --target claude,gemini
+```
+
+```bash Remove local project infect
+cd ~/projects/my-app
+makakoo infect --local --remove
+```
+
+</CodeGroup>
+
+### What is preserved
+
+- Any prose you wrote above the `<!-- makakoo:infect:start -->` marker.
+- Any prose you wrote below the `<!-- makakoo:infect:end -->` marker.
+- All other sections of the file not touched by infect.
+
+Only the marker-delimited block and the immediately surrounding blank lines are removed.
+
+<Note>
+If `makakoo uninfect` reports "no block found" for a CLI you know was infected, the marker lines may have been accidentally edited. Open the file, locate the Makakoo bootstrap prose, and delete it by hand. The file is plain text.
+</Note>

@@ -1,0 +1,173 @@
+---
+title: "Frequently asked questions about Makakoo OS"
+description: "Answers to the most common questions about Makakoo OS: pricing, privacy, AI CLI support, uninstall, upgrades, LLM keys, and how the Brain directories work."
+---
+
+These are the questions that come up most often before and just after installing Makakoo OS. For step-by-step walkthroughs, see the [Getting started](/quickstart) guide or the [Use cases](/guides/use-cases) page.
+
+<AccordionGroup>
+
+  <Accordion title="Is Makakoo free?">
+    Yes. Makakoo OS is MIT-licensed and free to install and use. If you route Makakoo through a paid LLM provider (Anthropic, OpenAI, and so on), the token costs are yours — but Makakoo itself costs nothing. You can run it with zero API keys by pointing it at a local model.
+  </Accordion>
+
+  <Accordion title="Does Makakoo send my data anywhere?">
+    No. All Brain journals and pages live on disk at `~/MAKAKOO/data/Brain/`. Makakoo does not phone home, does not upload usage metrics, and does not call any external server except the LLM gateway you configure. The default gateway is `localhost` via switchAILocal.
+
+    If you add an adapter like Anthropic direct, your prompts go to that provider — the same as if you used their CLI directly. That adapter surface is opt-in per-call.
+  </Accordion>
+
+  <Accordion title="Do I need an AI CLI installed before installing Makakoo?">
+    No. Makakoo installs and runs even with zero AI CLIs on your machine. The infect step simply finds nothing to infect and moves on. Install an AI CLI any time later, then run `makakoo infect` to connect it to your Brain.
+  </Accordion>
+
+  <Accordion title="Which AI CLIs does Makakoo know about?">
+    Nine first-class hosts at v0.1.3, with the roster growing as new CLIs land:
+
+    - Claude Code (`claude`)
+    - Gemini CLI (`gemini`)
+    - Codex (`codex`)
+    - OpenCode (`opencode`)
+    - Mistral Vibe (`vibe`)
+    - Cursor (`cursor`)
+    - Qwen Code (`qwen`)
+    - Kimi (`@moonshotai/kimi-cli`) — added v0.1.3
+    - pi (the blessed CLI coding agent that ships with Makakoo)
+
+    IDE assistants — GitHub Copilot, Continue, Cline, JetBrains AI — are detected but not infected. They handle their own persona layer.
+  </Accordion>
+
+  <Accordion title="Does installing Makakoo change any files outside its own directory?">
+    Only three places:
+
+    1. **`~/.local/bin/makakoo`** (or your chosen install directory) — the binary.
+    2. **Each infected CLI's config file** — adds a fenced bootstrap block. Examples: `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`. The block has explicit `START` / `END` markers so it can be cleanly removed by `makakoo uninfect`.
+    3. **A LaunchAgent / systemd unit / auto-launch entry** for the daemon.
+
+    Your shell dotfiles (`.zshrc`, `.bashrc`, `.profile`) are never touched.
+  </Accordion>
+
+  <Accordion title="Can Makakoo edit my code without asking?">
+    No. The default write-sandbox covers four paths only: `~/MAKAKOO/data/reports/`, `~/MAKAKOO/data/drafts/`, `~/MAKAKOO/tmp/`, and `/tmp/`. Everything outside those paths requires either a CLI-level grant (`makakoo perms grant <path> --for 1h`) or a conversational approval in-session.
+
+    Broad scopes (`/`, `~`, `*`, `**`) are refused regardless of how the request is made.
+  </Accordion>
+
+  <Accordion title="Can I use my own LLM API key?">
+    Yes. Store your key via the OS keyring (preferred):
+
+    ```bash
+    makakoo secret set AIL_API_KEY
+    ```
+
+    Or set the environment variable directly:
+
+    ```bash
+    export AIL_API_KEY=<your-key>
+    export AIL_BASE_URL=<your-gateway-base-url>
+    ```
+
+    Makakoo supports any OpenAI-compatible endpoint out of the box. Other shapes (Anthropic direct, OpenRouter, and others) are first-class via the adapter registry — run `makakoo adapter list` to see what's available.
+  </Accordion>
+
+  <Accordion title="What if I don't want ANY cloud LLM in the loop?">
+    Point `AIL_BASE_URL` at a local runtime — Ollama, LM Studio, llama.cpp, switchAILocal, or your own proxy. Everything in Makakoo (Brain search, SANCHO tasks, agent tool-calls) routes through the same gateway, so setting one environment variable keeps the entire stack local.
+
+    ```bash
+    export AIL_BASE_URL=http://localhost:11434/v1   # example: Ollama
+    ```
+  </Accordion>
+
+  <Accordion title="How do I uninstall?">
+    Clean removal in three commands:
+
+    ```bash
+    makakoo uninfect          # strip the bootstrap block from every CLI config
+    makakoo daemon uninstall  # remove the LaunchAgent / systemd unit / auto-launch entry
+    rm -rf ~/.makakoo ~/MAKAKOO   # removes all data including your Brain
+    ```
+
+    <Warning>
+      The `rm -rf` command permanently deletes your Brain journals and pages. Back up `~/MAKAKOO/data/Brain/` first if you want to keep them.
+    </Warning>
+
+    See the full [Uninstall guide](/troubleshooting/uninstall) for partial removal options and per-platform notes.
+  </Accordion>
+
+  <Accordion title="How do I upgrade to a newer version?">
+    ```bash
+    makakoo upgrade            # auto-detects how you installed (cargo / brew / curl-pipe)
+    makakoo upgrade --dry-run  # preview the plan without running anything
+    makakoo upgrade --reinfect # also refresh CLI bootstrap blocks after the binary swap
+    ```
+
+    `makakoo upgrade` is available since v0.1.3 (2026-05-02). For earlier binaries, do a one-time manual upgrade via `brew upgrade traylinx/tap/makakoo` or by re-running the install script — from v0.1.3 onwards, `makakoo upgrade` is the one-command path.
+  </Accordion>
+
+  <Accordion title="My AI CLI session feels slower after infect. Why?">
+    The bootstrap block adds approximately 5 KB (~2 000 tokens) to every new session's system prompt, which adds roughly 50–200 ms to the first turn. After the first turn the LLM provider caches the block and subsequent turns return to normal speed.
+
+    If you notice sustained latency, run `makakoo infect --verify` — sometimes the block gets written twice (for example, after an upgrade without `--reinfect`). Re-running infect cleans up the duplicate:
+
+    ```bash
+    makakoo infect --verify
+    makakoo infect
+    ```
+  </Accordion>
+
+  <Accordion title="Can I use Makakoo with Obsidian or Logseq?">
+    Yes. The Makakoo Brain at `~/MAKAKOO/data/Brain/` is plain markdown — Logseq format by default.
+
+    **Use Obsidian as a UI over the existing Brain:** Open Obsidian → **Open folder as vault** → point it at `~/MAKAKOO/data/Brain/`. No registration needed; same files, Obsidian UX.
+
+    **Connect a separate vault:**
+    ```bash
+    makakoo setup brain
+    # or
+    makakoo brain add personal obsidian ~/Documents/MyVault
+    ```
+  </Accordion>
+
+  <Accordion title="Does Makakoo work on a corporate or locked-down machine?">
+    Mostly yes. Requirements:
+
+    - **macOS:** Can run a non-signed binary. macOS Gatekeeper allows your own downloads once you right-click → Open the binary once.
+    - **Linux:** Standard user-land install. No sudo needed for Makakoo itself.
+    - **Windows:** Developer Mode must be enabled for symlinks (Settings → Privacy & security → For developers).
+
+    No admin or sudo is needed for Makakoo itself. Some optional installs (Homebrew taps, npm globals) may require elevation depending on how your IT department configured the package manager.
+  </Accordion>
+
+  <Accordion title="Where do I report bugs?">
+    File an issue at [github.com/makakoo/makakoo-os/issues](https://github.com/makakoo/makakoo-os/issues) once the repo is public. Include:
+
+    - Output of `makakoo version`
+    - The exact command you ran
+    - The exact error message
+    - One line describing what you expected to happen
+
+    Until the repo goes public, use the private channels you know about.
+  </Accordion>
+
+  <Accordion title="What's the difference between ~/.makakoo/ and ~/MAKAKOO/?">
+    - **`~/MAKAKOO/`** — your data. Brain journals, pages, installed plugin copies, state files. Back this up if you care about the content.
+    - **`~/.makakoo/`** — machine-local config. Adapter registry, trust keys, primary-adapter choice, cache. Safe to delete (you lose adapter trust and primary choice, but no Brain content is lost).
+
+    The split follows the Unix convention: dotfiles (`~/.makakoo/`) hold machine-local config (like `~/.aws/` or `~/.docker/`), while `~/MAKAKOO/` is your visible, user-owned content.
+  </Accordion>
+
+  <Accordion title="Can Makakoo agents share files with each other?">
+    Yes — via [garagetytus](https://github.com/makakoo/makakoo-os), a self-hosted S3-compatible daemon. The `garage-store` plugin is bundled by default in the `core` and `sebastian` distros. For `minimal`, `creator`, and `trader` distros, install it with:
+
+    ```bash
+    makakoo plugin install garage-store
+    ```
+
+    Two flavors are available: a local laptop daemon at `127.0.0.1:3900` (zero internet exposure, single user) or the Tytus shared service (multi-tenant, reachable from any machine). Both speak the standard S3 wire protocol — boto3, aws-cli, and rclone all work unchanged.
+  </Accordion>
+
+  <Accordion title="Why is it named &quot;Makakoo&quot; (double-o)?">
+    The owned domain is `makakoo.com` — the double-o matches. The persona ("Harvey" on Sebastian's install) is configurable per-user via `config/persona.json`. Makakoo is the platform name; the assistant name is yours to set.
+  </Accordion>
+
+</AccordionGroup>

@@ -1,0 +1,336 @@
+---
+title: "Write and publish a Makakoo OS plugin"
+description: "Build a Makakoo OS plugin: write a plugin.toml, add a Python entrypoint, declare capability grants, bootstrap a venv, and publish with a semver tag."
+---
+
+A Makakoo OS plugin is a directory containing a `plugin.toml` manifest and an entrypoint script. The manifest declares the plugin's identity, source, ABI constraints, required capabilities, and how to start, stop, and health-check the process. The runtime reads this file at install time, validates the grants, and enforces them at every capability call during execution.
+
+## Plugin directory layout
+
+```
+my-plugin/
+├── plugin.toml          # required: manifest
+├── src/
+│   └── main.py          # entrypoint (Python) or main.rs (Rust)
+├── SKILL.md             # required for skill-kind plugins
+├── README.md
+└── tests/
+    └── test_main.py
+```
+
+<Steps>
+  <Step title="Create the manifest">
+    Start with a `plugin.toml`. The `[plugin]` table describes identity; `[source]` pins where the code lives; `[abi]` declares the ABI contract; `[capabilities]` grants the exact permissions the plugin needs.
+
+    ```toml
+    [plugin]
+    name     = "my-skill"
+    version  = "0.1.0"
+    kind     = "skill"          # skill | agent | sancho-task | watchdog | monitor | pattern | lib | mascot
+    language = "python"
+    summary  = "One-line description shown in makakoo plugin list"
+    authors  = ["you"]
+    license  = "MIT"
+
+    [source]
+    path = "plugins-core/my-skill"   # local path; use [source].git for published plugins
+
+    [abi]
+    skill = "^1.0"               # ABI contract version — set to the kind you declared
+
+    [depends]
+    python = ">=3.11"
+
+    [entrypoint]
+    run = ".venv/bin/python -m src.main run"
+
+    [capabilities]
+    grants = [
+      "brain/read",
+      "net/http:https://api.example.com/*",
+      "secrets/read:MY_API_KEY",
+    ]
+
+    [state]
+    dir       = "$MAKAKOO_HOME/state/my-skill"
+    retention = "keep"
+    ```
+
+    <Tip>Grant only what you actually use. The runtime denies every capability call not listed in `grants`, and the audit log records every denial. Over-provisioning makes auditing harder.</Tip>
+  </Step>
+
+  <Step title="Write the entrypoint">
+    Skill and sancho-task plugins receive a command verb as `argv[1]`. The `run` verb is called by SANCHO or `makakoo skill <name>`. Return JSON to stdout so SANCHO can record structured results.
+
+    ```python
+    #!/usr/bin/env python3
+    # src/main.py
+
+    import sys
+    import json
+    import os
+
+    def run():
+        """Called when the task fires or makakoo skill <name> is invoked."""
+        # Use the makakoo Python client if you declared brain/* or llm/* grants
+        # from makakoo import Client
+        # client = Client.connect_from_env()
+        # journals = client.brain_recent(10)
+
+        result = {
+            "status": "ok",
+            "duration_ms": 0,
+            "message": "my-skill completed",
+        }
+        print(json.dumps(result))
+        return 0
+
+    def health():
+        """Called periodically to verify the plugin is responsive."""
+        print(json.dumps({"status": "ok"}))
+        return 0
+
+    if __name__ == "__main__":
+        cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
+        if cmd == "run":
+            sys.exit(run())
+        elif cmd == "health":
+            sys.exit(health())
+        else:
+            print(f"unknown command: {cmd}", file=sys.stderr)
+            sys.exit(1)
+    ```
+
+    For agent-kind plugins, declare `start`, `stop`, and `health` in `[entrypoint]` instead of `run`:
+
+    ```toml
+    [entrypoint]
+    start  = ".venv/bin/python -m src.agent --start"
+    stop   = "pkill -f agent.py"
+    health = ".venv/bin/python -m src.agent --health"
+    ```
+  </Step>
+
+  <Step title="Bootstrap the Python venv">
+    Python plugins must be self-contained. During install, `makakoo plugin install` runs the plugin's `[install].unix` script, which should call `makakoo plugin internal venv-bootstrap` to create and populate the `.venv` from the plugin directory.
+
+    Create an `install.sh` (referenced from `plugin.toml` as `[install].unix = "install.sh"`):
+
+    ```bash
+    #!/usr/bin/env bash
+    # install.sh — runs with cwd = plugin root, $MAKAKOO_PLUGIN_DIR set
+    set -euo pipefail
+    makakoo plugin internal venv-bootstrap --mode editable --python python3.11
+    ```
+
+    The `editable` mode runs `pip install -e .` against the plugin directory. For plugins without a `pyproject.toml`, use `--mode pip --spec "-r requirements.txt"` instead:
+
+    ```bash
+    makakoo plugin internal venv-bootstrap --mode pip --spec "-r requirements.txt"
+    ```
+
+    And add the `[install]` table to `plugin.toml`:
+
+    ```toml
+    [install]
+    unix = "install.sh"
+    ```
+  </Step>
+
+  <Step title="Install and test locally">
+    Install from the local directory using `--allow-unsigned` (local paths have no detached `.sig` file):
+
+    ```bash
+    makakoo plugin install ./my-skill --allow-unsigned
+    makakoo plugin list
+    makakoo plugin info my-skill
+    ```
+
+    Run a skill manually:
+
+    ```bash
+    makakoo skill my-skill
+    ```
+
+    For sancho-task plugins, fire the task immediately:
+
+    ```bash
+    makakoo sancho run my_check --force
+    ```
+
+    Check logs if anything fails:
+
+    ```bash
+    cat ~/.makakoo/logs/plugins/my-skill/error.log
+    RUST_LOG=debug makakoo sancho run my_check
+    ```
+  </Step>
+
+  <Step title="Publish to GitHub">
+    Once your plugin works locally, push it to GitHub and pin the manifest to a semver tag or 40-character commit SHA. Branch names like `main` are considered unstable and are rejected unless you pass `--allow-unstable-ref`.
+
+    Update `[source]` in `plugin.toml` to point at the git URL:
+
+    ```toml
+    [source]
+    git = "https://github.com/you/my-skill"
+    rev = "v0.1.0"
+    # blake3 is optional for git sources (the SHA already content-pins the tree)
+    # blake3 = "a8bf…<64 hex>"
+    ```
+
+    Push and tag:
+
+    ```bash
+    git tag v0.1.0
+    git push origin v0.1.0
+    ```
+
+    Users install with:
+
+    ```bash
+    makakoo plugin install git+https://github.com/you/my-skill@v0.1.0
+    ```
+  </Step>
+</Steps>
+
+## Install sources
+
+Three source shapes are supported — exactly one may be declared per manifest.
+
+<CodeGroup>
+```toml Local path
+[source]
+path = "plugins-core/my-plugin"   # relative to repo root, or absolute
+```
+
+```toml Git URL
+[source]
+git = "https://github.com/you/my-plugin"
+rev = "v0.1.0"          # semver tag or 40-char SHA — branches rejected by default
+# blake3 = "..."        # optional for git; computed over installed tree post-clone
+```
+
+```toml HTTPS tarball
+[source]
+tar    = "https://example.com/my-plugin-0.1.0.tar.gz"
+blake3 = "a8bf…<64 hex>"   # required for tarballs — install refused without it
+```
+</CodeGroup>
+
+<Note>
+  Pass `--allow-unstable-ref` to install a plugin pinned to a branch rather than a tag or SHA. The warning is printed on install and recorded in `plugins.lock` so non-pinned sources stay visible.
+</Note>
+
+## Capability grant syntax
+
+Grants follow the pattern `verb/resource:scope`. The scope is optional and narrows the permission to a specific target.
+
+```toml
+[capabilities]
+grants = [
+  "brain/read",                                  # read any Brain content
+  "brain/write",                                 # write to journals
+  "llm/chat",                                    # any model via gateway
+  "llm/chat:minimax/ail-compound",               # one specific model
+  "llm/embed",                                   # vector embeddings
+  "net/http:https://api.example.com/*",          # one domain (glob)
+  "net/http:https://*.example.com/v2/*",         # wildcard subdomain
+  "secrets/read:MY_API_KEY",                     # one named secret
+  "state/plugin",                                # plugin's own state dir
+  "fs/read:~/Documents/reports/*",               # read a path pattern
+  "fs/write:$MAKAKOO_HOME/export/*",             # write a path pattern
+]
+```
+
+## SANCHO task contract
+
+For `sancho-task` kind plugins, SANCHO calls the `run` entrypoint and expects JSON on stdout:
+
+```python
+import json, sys
+
+def run_task():
+    # ... do work ...
+    return {
+        "status": "ok",        # "ok" | "partial" | "skipped"
+        "duration_ms": 1234,
+        "items_processed": 42,
+        "message": "Checked 42 items, all healthy",
+    }
+
+if __name__ == "__main__":
+    print(json.dumps(run_task()))
+```
+
+Declare the schedule in `plugin.toml`:
+
+```toml
+[sancho]
+tasks = [
+  { name = "my_check", interval = "30m", active_hours = [8, 22] }
+]
+```
+
+## Plugin lifecycle
+
+```
+install → [install].unix runs (venv-bootstrap, etc.)
+        → start  (agents: [entrypoint].start; skills: passive)
+        → running (daemon supervises agent processes, SANCHO fires sancho-tasks)
+        → health  ([entrypoint].health polled periodically)
+        → stop    ([entrypoint].stop on graceful shutdown)
+        → uninstall (plugin dir removed; state preserved unless --purge)
+```
+
+The daemon manager monitors agent PID, restarts on crash with exponential backoff, and quarantines the plugin after five crashes within 15 minutes.
+
+## Using capabilities from Python
+
+The `makakoo` client library connects using `MAKAKOO_SOCKET_PATH` injected at runtime:
+
+```python
+from makakoo import Client
+
+client = Client.connect_from_env()
+
+# Read recent Brain entries (requires brain/read grant)
+journals = client.brain_recent(10)
+
+# Write to Brain (requires brain/write grant)
+client.brain_write("- Completed my-skill run")
+
+# Call the LLM (requires llm/chat grant)
+response = client.llm_chat("minimax/ail-compound", [
+    {"role": "user", "content": "Summarize this: ..."}
+])
+
+# Read a secret (requires secrets/read:MY_API_KEY grant)
+with client.secret_read("MY_API_KEY") as key:
+    api_key = key.value
+```
+
+Plugins also receive these environment variables at runtime:
+
+```bash
+MAKAKOO_HOME          # e.g. /Users/you/.makakoo
+MAKAKOO_SOCKET_PATH   # path to the per-plugin capability socket
+PLUGIN_NAME           # e.g. my-skill
+PLUGIN_ROOT           # absolute path to the installed plugin directory
+```
+
+## Update workflow
+
+After publishing a new tag, users update with:
+
+```bash
+makakoo plugin update my-skill
+```
+
+If only file contents changed (same manifest hash), the update is silent. If `plugin.toml` changed — new grants, widened sandbox, new install script — the user sees a diff and must confirm before the new code runs. Pass `--yes` to skip the prompt in automated contexts.
+
+```bash
+makakoo plugin outdated          # dry-run: list plugins with upstream drift
+makakoo plugin update --all      # update every git-sourced plugin
+makakoo plugin update --all --yes  # non-interactive batch update
+```

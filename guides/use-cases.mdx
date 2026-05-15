@@ -1,0 +1,221 @@
+---
+title: "What you can do with Makakoo OS"
+description: "Practical recipes for the most common Makakoo workflows: journaling, querying your Brain, vault connections, plugin management, and more."
+---
+
+Makakoo OS becomes useful the moment you start writing to your Brain and letting your AI CLIs read from it. The recipes below cover the tasks most people reach for in their first weeks — each with exact commands you can copy and run.
+
+<AccordionGroup>
+
+  <Accordion title="Keep a daily journal that every AI CLI can read">
+    Write a note once and every infected AI CLI on your machine can find it.
+
+    ```bash
+    makakoo journal add "Met with Ana from Acme. They want the Q3 demo before July 15. Follow up next Monday."
+    ```
+
+    That line is appended to today's journal at `~/MAKAKOO/data/Brain/journals/2026_04_23.md`. The next time you open any AI CLI and ask *"what's happening with Acme?"*, it will find the note.
+
+    Add `[[double brackets]]` to link named entities — pages are created automatically under `~/MAKAKOO/data/Brain/pages/`:
+
+    ```bash
+    makakoo journal add "Met with [[Ana]] from [[Acme]]. Demo target: 2026-07-15."
+    ```
+
+    Now the `Ana` and `Acme` pages cross-reference each other, and any query about either name surfaces both.
+  </Accordion>
+
+  <Accordion title="Ask your Brain a question">
+    Query everything you (or any AI) have written about a topic.
+
+    ```bash
+    makakoo query "what did I decide about the Acme Q3 demo?"
+    ```
+
+    Under the hood this runs full-text search, vector similarity, and LLM synthesis. The result is a short answer plus the journal entries it relied on.
+
+    If you want raw search hits without LLM synthesis:
+
+    ```bash
+    makakoo search "acme demo"
+    ```
+  </Accordion>
+
+  <Accordion title="Connect an Obsidian vault or a folder of notes">
+    Make an existing Obsidian vault or plain markdown folder a first-class Makakoo Brain source.
+
+    ```bash
+    makakoo setup brain
+    ```
+
+    The interactive picker auto-detects common Obsidian paths (`~/Documents/Obsidian Vault`, `~/Documents/obsidian`, `~/Obsidian`). Confirm the detected path, optionally change the write default, and you are done.
+
+    You can also manage Brain sources directly:
+
+    ```bash
+    makakoo brain list                                 # show registered sources
+    makakoo brain add personal obsidian ~/MyVault      # add a vault explicitly
+    makakoo brain set-default personal                 # switch where Makakoo writes
+    makakoo brain sync --name personal                 # scan and ingest into search
+    ```
+
+    **Two common scenarios:**
+
+    - **You already have a separate Obsidian vault.** Use the commands above. This registers it as an additional source Makakoo reads from.
+    - **You want Obsidian as a nicer editor for the default Brain.** Open Obsidian → `Open folder as vault` → point at `~/MAKAKOO/data/Brain/`. Same files, Obsidian UX, zero extra config.
+  </Accordion>
+
+  <Accordion title="Install the blessed CLI agent (pi) and terminal (Ghostty)">
+    Let Makakoo install the two first-class tools it ships with.
+
+    ```bash
+    makakoo setup cli-agent    # pi (@mariozechner/pi-coding-agent via npm)
+    makakoo setup terminal     # Ghostty — macOS only, via Homebrew cask
+    ```
+
+    Each section prompts `[Y/n/s]`:
+    - `Y` / Enter — install now
+    - `N` — decline this run, re-ask on the next setup
+    - `S` — mark skipped so the wizard never re-asks (unless you run `--reset`)
+
+    If `npm` or `brew` is not installed, the wizard tells you what to install first rather than silently doing nothing.
+  </Accordion>
+
+  <Accordion title="Pick which LLM Makakoo uses">
+    Choose whether Makakoo's internal calls route through switchAILocal, Anthropic, OpenRouter, or another adapter.
+
+    ```bash
+    makakoo setup model-provider
+    ```
+
+    You will see the adapters currently registered. Enter the number of the one you want as primary. The wizard writes `~/.makakoo/primary_adapter.toml` naming your choice.
+
+    To see what adapters are registered without picking:
+
+    ```bash
+    makakoo adapter list
+    ```
+
+    <Note>
+      API keys for each adapter are configured through that adapter's own install or doctor flow — this section only names the primary routing adapter.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Make every AI CLI share the same Brain (infect)">
+    Write the Makakoo bootstrap block into every AI CLI config on your machine. This is done automatically by `makakoo install`; re-run any time to repair drift.
+
+    ```bash
+    makakoo infect --verify              # report drift without writing
+    makakoo infect                       # write bootstrap block to every host
+    makakoo infect --target claude,gemini  # restrict to specific CLIs
+    makakoo infect --verify --json       # machine-readable drift report
+    ```
+
+    The bootstrap block lands in each CLI's global config file:
+
+    | CLI | File |
+    |-----|------|
+    | Claude | `~/.claude/CLAUDE.md` |
+    | Gemini | `~/.gemini/GEMINI.md` |
+    | Codex | `~/.codex/AGENTS.md` |
+    | OpenCode | `~/.config/opencode/AGENTS.md` |
+    | Vibe | `~/.vibe/AGENTS.md` |
+    | Cursor | `~/.cursor/rules/` |
+    | Qwen | `~/.qwen/QWEN.md` |
+    | pi | `~/.pi/AGENTS.md` |
+
+    Makakoo never touches your shell dotfiles (`.zshrc`, `.bashrc`).
+  </Accordion>
+
+  <Accordion title="Give an agent write access to a folder outside Makakoo">
+    Extend an infected AI CLI's write sandbox to a project folder it doesn't have access to by default.
+
+    **From a CLI conversation** (easiest): if an agent asks *"Want me to grant myself 1h write access to ~/code?"*, say yes. The agent calls `grant_write_access` on your behalf.
+
+    **From the terminal:**
+
+    ```bash
+    makakoo perms grant ~/code/scratch/ --for 1h
+    makakoo perms list                    # see active grants
+    makakoo perms revoke <grant_id>       # pull access back early
+    ```
+
+    Default duration is 1 hour. Use `--for permanent` only for paths you have deliberately reviewed — permanent grants outside `$MAKAKOO_HOME` require `--yes-really`.
+  </Accordion>
+
+  <Accordion title="See what Makakoo is doing in the background">
+    Inspect the SANCHO task engine and daemon health.
+
+    ```bash
+    makakoo sancho status      # registered tasks and last-run state
+    makakoo sancho tick        # force one tick right now
+    makakoo daemon status      # daemon health: running / installed / not installed
+    makakoo version            # version and persona loaded
+    ```
+
+    Log locations:
+
+    - `$MAKAKOO_HOME/logs/daemon.log` — the Makakoo daemon log
+    - `~/MAKAKOO/data/Brain/journals/` — SANCHO writes task summaries to today's journal entry
+  </Accordion>
+
+  <Accordion title="Install a plugin">
+    Add a plugin from a git URL, a local directory, or the in-tree `plugins-core` set.
+
+    ```bash
+    makakoo plugin list                                         # what's installed
+    makakoo plugin install git+https://github.com/you/my-plugin@v1
+    makakoo plugin install /Users/you/local/plugin-dir
+    makakoo plugin uninstall my-plugin
+    ```
+
+    Plugins live at `~/MAKAKOO/plugins/<name>/`, declare their own config in `plugin.toml`, and run sandboxed under the capability model.
+  </Accordion>
+
+  <Accordion title="Re-run the setup wizard for one section">
+    Change your mind about a single configuration area without re-running the full wizard.
+
+    ```bash
+    makakoo setup persona          # rename the assistant
+    makakoo setup brain            # add or remove a vault
+    makakoo setup cli-agent        # install pi if you skipped it
+    makakoo setup terminal         # macOS only
+    makakoo setup model-provider   # switch LLM routing
+    makakoo setup infect           # re-infect drifted CLI hosts
+    ```
+
+    To see the current state of all sections without any prompts:
+
+    ```bash
+    makakoo setup --non-interactive
+    ```
+  </Accordion>
+
+  <Accordion title="Uninstall Makakoo">
+    Clean removal in three steps:
+
+    ```bash
+    makakoo uninfect            # strip bootstrap block from every CLI config
+    makakoo daemon uninstall    # remove the LaunchAgent or systemd unit
+    rm -rf ~/.makakoo ~/MAKAKOO # delete config and data
+    ```
+
+    <Warning>
+      `rm -rf ~/MAKAKOO` deletes your Brain, including all journals and pages. Back up anything you want to keep before running this.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Get help from any AI CLI about Makakoo itself">
+    Once infected, every AI CLI on your machine knows how Makakoo works. Ask it in plain language:
+
+    ```
+    > What skills do you have?
+    > Can you read my Brain?
+    > How do I add an Obsidian vault?
+    > Why is Makakoo saying "not on PATH"?
+    ```
+
+    The bootstrap block teaches each CLI about `skill_discover`, the Brain paths, the adapter registry, and the safety rules — so it answers correctly without guessing.
+  </Accordion>
+
+</AccordionGroup>

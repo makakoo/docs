@@ -1,0 +1,63 @@
+---
+title: "Makakoo OS command reference: all makakoo subcommands"
+description: "Complete reference for every makakoo subcommand — search, query, infect, plugin, daemon, perms, and more — with links to detailed pages."
+---
+
+The `makakoo` binary is the single entry point for the entire Makakoo OS. Running `makakoo` with no arguments prints a first-run banner. Every feature — Brain search, CLI infection, daemon control, plugin management, write-access grants — is exposed as a subcommand. This page lists every top-level subcommand with a one-line description and links to the detailed reference pages where they exist.
+
+## All subcommands
+
+| Command | Description |
+|---|---|
+| [`search`](/commands/search-and-query#makakoo-search) | Full-text search across the Brain using FTS5 — no LLM call, instant results. |
+| [`query`](/commands/search-and-query#makakoo-query) | Ask a natural-language question; FTS5 retrieval fused with LLM synthesis. |
+| [`sync`](/commands/search-and-query#makakoo-sync) | Sync on-disk Brain files (pages, journals, auto-memory) into the FTS5 index. |
+| [`infect`](/commands/infect-and-uninfect#makakoo-infect) | Write the Makakoo bootstrap block and MCP registration into every AI CLI host. |
+| [`uninfect`](/commands/infect-and-uninfect#makakoo-uninfect) | Strip the Makakoo bootstrap block from every AI CLI host's global config. |
+| [`plugin`](/commands/plugin) | Install, uninstall, enable, disable, update, and lifecycle-manage plugins. |
+| [`sancho`](/commands/sancho) | Inspect and manually trigger the SANCHO proactive task engine. |
+| [`perms`](/commands/perms) | Manage runtime write-access grants — list, grant, revoke, purge, audit. |
+| [`daemon`](/commands/daemon) | Install, uninstall, check status, and view logs for the background daemon. |
+| `mcp` | Passthrough to the `makakoo-mcp` MCP stdio server binary. |
+| `buddy` | Show the active mascot's ASCII frame and state line. |
+| `nursery` | Register and list mascots in the registry. |
+| `dream` | Run a memory consolidation pass. |
+| `flag` | Flag a wrong response for manual GYM Layer 1 training entry. |
+| `memory` | Memory subsystem diagnostics and maintenance (`stats`, `purge-legacy`). |
+| `promotions` | Print memory promotion candidates above a score threshold. |
+| `skill` | Run a Python skill by name, forwarding arguments to its entry script. |
+| `upgrade` | Self-upgrade `makakoo` and `makakoo-mcp` binaries, auto-detecting the install method. |
+| `run` | Run a pattern — one-shot LLM dispatch with strategy and mascot composition. |
+| `version` | Print version, persona, and build metadata. |
+| `setup` | Interactive re-runnable setup wizard (persona, brain, cli-agent, terminal, model-provider, infect). |
+| `secret` | Read, write, and delete secrets in the OS keyring. |
+| `distro` | List, install, and save plugin bundle distros. |
+| `migrate` | Prepare `$MAKAKOO_HOME` for kernel use — creates missing dirs, writes a migration marker. |
+| `install` | One-shot install: distro + daemon + infect + health check in sequence. |
+| `session` | Manage JSONL session trees — list, fork, label, rewind, export. |
+| `adapter` | Manage external AI-agent adapters — list, install, call, doctor, and more. |
+| `octopus` | Harvey Octopus signed-MCP peer federation — bootstrap, invite, join, trust. |
+| `bucket` | Bucket lifecycle on the local Garage backend — create, grant, revoke, expire. |
+| `s3` | S3 endpoint operations — bootstrap the service keypair, manage endpoints. |
+| `docs-mcp` | Run the Makakoo OS documentation as an MCP stdio server. |
+| `docs` | Docs corpus management — fetch latest docs from GitHub and rebuild the FTS5 cache. |
+| `completion` | Emit a shell completion script for bash, zsh, fish, elvish, or powershell. |
+| `agent` | Drive agent plugin lifecycle (`start`, `stop`, `status`, `health`) and manage multi-bot subagent slots. |
+
+## Global behavior
+
+Running `makakoo` with no subcommand prints a first-run banner instead of an error. Every subcommand supports `--help` for a usage summary.
+
+```bash
+makakoo --help
+makakoo search --help
+makakoo plugin install --help
+```
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | General error or drift detected (e.g. `infect --verify` exits 1 when any CLI has drifted) |
+| `2` | JSON response validation failed (e.g. `run --json` when response is not JSON) |

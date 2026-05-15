@@ -1,0 +1,234 @@
+---
+title: "Capability sandbox and permission model"
+description: "Makakoo's three-layer permission model: baseline write sandbox, plugin.toml manifest grants, runtime user grants via makakoo perms, and a full audit log."
+---
+
+Every plugin in Makakoo OS operates within a capability sandbox: it can only access the resources it explicitly declared in its manifest, and every access is audit-logged. This is how a trading plugin stays confined to Polymarket's API, a Brain-writing skill can't touch your code directory, and you can grant a one-hour write window to a specific folder without restarting anything.
+
+## The three-layer model
+
+Capability enforcement is additive across three layers. A write (or network call, or secret read) is allowed if **any** layer matches. No layer can remove a grant that a higher-precedence layer issued.
+
+```
++-----------------------------------------------------------+
+| LAYER 3 — User grants (runtime)                           |
+|   $MAKAKOO_HOME/config/user_grants.json                   |
+|   Time-limited or permanent. Managed via makakoo perms.   |
++-----------------------------------------------------------+
+| LAYER 2 — Manifest grants (per-plugin, install-time)      |
+|   [capabilities].grants in plugin.toml                    |
+|   Scoped per verb vocabulary. Accepted on install.        |
++-----------------------------------------------------------+
+| LAYER 1 — Baseline (kernel default)                       |
+|   Always allowed for the default agent:                   |
+|   ~/MAKAKOO/data/reports/                                 |
+|   ~/MAKAKOO/data/drafts/                                  |
+|   ~/MAKAKOO/tmp/                                          |
+|   /tmp/                                                   |
++-----------------------------------------------------------+
+```
+
+### Layer 1: baseline sandbox
+
+The kernel's default agent can always write to four paths without any declaration or user approval:
+
+- `~/MAKAKOO/data/reports/`
+- `~/MAKAKOO/data/drafts/`
+- `~/MAKAKOO/tmp/`
+- `/tmp/`
+
+Writes to any path outside these four are denied unless Layer 2 or Layer 3 grants them.
+
+### Layer 2: manifest grants
+
+Every plugin declares its capabilities in `plugin.toml` under `[capabilities].grants`. The user reviews and accepts these at install time. Example from the `arbitrage` plugin:
+
+```toml
+# plugin.toml
+[capabilities]
+grants = [
+  "brain/read",
+  "brain/write",
+  "llm/chat:minimax/ail-compound",
+  "net/http:https://clob.polymarket.com/*",
+  "net/http:https://data-api.polymarket.com/*",
+  "secrets/read:POLYMARKET_API_KEY",
+  "state/plugin",
+  "sancho/register:arbitrage_tick",
+  "mcp/register:arbitrage_status",
+]
+```
+
+At install, the user sees a plain-English summary before confirming:
+
+```
+Installing agent-arbitrage (v0.3.1)
+  brain:       read, write
+  llm:         chat (minimax/ail-compound only)
+  network:     https://clob.polymarket.com/*
+               https://data-api.polymarket.com/*
+  secrets:     POLYMARKET_API_KEY
+  state:       own state dir
+  sancho:      arbitrage_tick (every 5m)
+  mcp:         arbitrage_status
+
+Proceed? [y/N]
+```
+
+### Layer 3: runtime user grants
+
+Layer 3 lets you extend write access at runtime without reinstalling anything. Grants are time-limited by default (1 hour) and stored in `$MAKAKOO_HOME/config/user_grants.json`.
+
+```bash
+# Grant write access for 1 hour (default)
+makakoo perms grant ~/code/scratch/
+
+# Grant for 24 hours with a label
+makakoo perms grant ~/work/ --for 24h --label "sprint work"
+
+# Permanent grant (use sparingly)
+makakoo perms grant ~/notes/ --for permanent --yes-really
+
+# List active grants
+makakoo perms list
+
+# Revoke by id
+makakoo perms revoke g_20260421_abcd1234
+
+# Drop all expired grants
+makakoo perms purge
+
+# Audit recent grant and revoke activity
+makakoo perms audit --since 1h
+```
+
+<Warning>
+Broad-scope paths are rejected at the CLI level regardless of arguments. The following are always refused: `/`, `~`, `~/`, `$HOME`, bare `*`, bare `**`. Permanent grants outside `$MAKAKOO_HOME` require the `--yes-really` flag.
+</Warning>
+
+## The capability verb vocabulary
+
+Manifest grants use a `domain/verb:scope` syntax. Unrecognised verbs are rejected at manifest load time. The most common verbs:
+
+| Verb | Scope required | Meaning |
+|---|---|---|
+| `brain/read` | — | Read Brain markdown files and run FTS queries |
+| `brain/write` | — | Append journal entries, create or update pages |
+| `brain/query` | — | Run semantic + wikilink queries (implies `brain/read`) |
+| `llm/chat` | model glob | Call LLM completions via the Makakoo LLM client |
+| `llm/embed` | model glob | Request vector embeddings |
+| `net/http` | URL glob | Make HTTP(S) requests to approved endpoints |
+| `fs/read` | path glob | Read files outside the state dir |
+| `fs/write` | path glob | Write files outside the state dir |
+| `secrets/read` | key allowlist | Read specific keys from the OS keyring |
+| `state/plugin` | — | Read/write the plugin's own state directory |
+| `mcp/register` | tool name | Register a specific MCP tool with the gateway |
+| `sancho/register` | task name | Register a specific SANCHO task |
+
+<Note>
+`fs/read` and `fs/write` require a path glob scope — unscoped declarations are rejected at manifest load. Similarly, `secrets/read` requires an explicit key allowlist; `secrets/read:*` is always refused.
+</Note>
+
+## Unix socket IPC and PID verification
+
+Each plugin communicates with the kernel over a dedicated Unix domain socket (named pipe on Windows). The socket path is:
+
+```
+$MAKAKOO_HOME/run/plugins/<plugin-name>.sock
+```
+
+When a plugin starts, the kernel:
+
+1. Reads and validates the manifest's `[capabilities].grants`
+2. Builds an in-memory grant table for the plugin's session
+3. Opens the per-plugin socket with that grant table
+4. Verifies the connecting process's PID (via `LOCAL_PEERPID` on macOS, `SO_PEERCRED` on Linux) to confirm it's the spawned plugin and not an impostor
+
+Every helper call the plugin makes (`client.brain_read()`, `client.llm_chat()`, etc.) arrives on the socket as JSON-RPC. The kernel checks the requested verb and scope against the grant table before executing — allowed calls are served, denied calls return an error.
+
+```
+Plugin process
+    │
+    │  JSON-RPC on Unix socket
+    ▼
+Kernel capability gate
+    │
+    ├── Verb in grant table? → check scope glob
+    │
+    ├── ALLOW → execute, return result
+    └── DENY  → return error {"code": -32001, "message": "capability denied: net/http:..."}
+                write audit log entry
+```
+
+## Audit log
+
+Every capability check — allowed or denied — is written to:
+
+```
+$MAKAKOO_HOME/logs/audit.jsonl
+```
+
+```json
+{
+  "ts": "2026-04-15T17:35:22.123Z",
+  "plugin": "agent-arbitrage",
+  "plugin_version": "0.3.1",
+  "verb": "net/http",
+  "scope_requested": "https://clob.polymarket.com/books/BTC",
+  "scope_granted": "https://clob.polymarket.com/*",
+  "result": "allowed",
+  "duration_ms": 142,
+  "correlation_id": "abc123"
+}
+```
+
+The log rotates at 100 MB and retains archives for 7 days. Query it from the CLI:
+
+```bash
+# Recent entries
+makakoo perms audit --since 1h
+
+# Filter to one plugin
+makakoo audit --plugin agent-arbitrage
+
+# Show only denials (useful when debugging a misconfigured manifest)
+makakoo audit --denied
+```
+
+## Layer 1: installation integrity
+
+Before any runtime enforcement, Layer 1 covers install-time integrity:
+
+- Signed release binaries (Apple notarization + Windows Authenticode where certs are available)
+- Checksum verification on downloaded plugins (`--sha256` for tarball sources, `--blake3` for any source)
+- Homebrew tap and winget package integrity via their respective registries
+- For git-sourced plugins: refs must be semver tags or 40-character SHAs (use `--allow-unstable-ref` to bypass, at your own risk)
+
+## A worked example
+
+Given this grant state:
+
+```
+Installed plugins:
+  agent-inbox   grants fs/write:~/MAKAKOO/data/inbox-triage/**
+  agent-arb     grants fs/write:~/MAKAKOO/agents/arbitrage-agent/**
+
+Active user grants (user_grants.json):
+  g_20260421_a1b2c3d4  fs/write:~/code/**   expires 2026-04-21T18:00Z
+  g_20260421_e5f6g7h8  fs/write:~/notes/**  permanent
+```
+
+| Write target | Decision | Layer matched |
+|---|---|---|
+| `~/MAKAKOO/data/reports/x.md` | allowed | Layer 1 (baseline) |
+| `~/MAKAKOO/data/inbox-triage/sent.md` | allowed | Layer 2 (agent-inbox manifest) |
+| `~/code/src/main.rs` (before 18:00Z) | allowed | Layer 3 (user grant) |
+| `~/code/src/main.rs` (after 18:00Z) | denied — grant expired, purged by `perms_purge_tick` |
+| `~/notes/weekly.md` | allowed | Layer 3 (permanent user grant) |
+| `~/other/unmapped.md` | denied — error suggests `makakoo perms grant ~/other/` |
+
+## See also
+
+- [Brain and memory in Makakoo OS](/concepts/brain-and-memory) — `brain/read` and `brain/write` verb usage
+- [SANCHO proactive task scheduler](/concepts/sancho-scheduler) — `sancho/register` capability and the `perms_purge_tick` native task
+- [Infect AI CLIs with shared context](/concepts/infect-and-ai-clis) — the `infect/contribute` capability used by plugin fragments

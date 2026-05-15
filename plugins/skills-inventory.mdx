@@ -1,0 +1,407 @@
+---
+title: "Skills inventory: 200+ built-in AI skills"
+description: "Browse all 200+ Makakoo OS built-in AI skills by category: AI/ML, development, browser QA, productivity, research, infrastructure, creative, and more."
+---
+
+Makakoo OS ships more than 200 built-in AI skills organized across 13 categories. Each skill is a plugin of kind `skill` — a `plugin.toml` manifest paired with a `SKILL.md` that describes when and how to invoke it. Skills are installed individually with `--core` or in bulk via a distro.
+
+## Installing and running skills
+
+```bash
+# Install a skill from the core library
+makakoo plugin install skill-research-arxiv --core
+
+# Run a skill directly
+makakoo skill research-arxiv
+
+# Check what's installed
+makakoo plugin list
+
+# Get full manifest and lock entry for a skill
+makakoo plugin info skill-research-arxiv
+```
+
+<Tip>
+  Skills of kind `skill` are passive — they are not managed by the daemon. Running `makakoo skill <name>` invokes the entrypoint directly. SANCHO-scheduled behavior requires a `sancho-task` kind plugin.
+</Tip>
+
+## Portable vs internal skills
+
+Some skills ship a portable `SKILL.md` that external AI runtimes (LangChain, OpenAI Assistants, Cursor rules) can read and wire in without a running Makakoo install. Others are internal-only — they depend on the Brain, Olibia, SANCHO, or HarveyChat and have no meaning outside a live Makakoo install.
+
+Use `makakoo skill skill_discover` (from `lib-harvey-core`) to walk the installed tree and discover every `SKILL.md`:
+
+```bash
+makakoo skill skill_discover
+```
+
+## Skills by category
+
+<AccordionGroup>
+  <Accordion title="AI/ML (skill-ai-ml-*)">
+    Tools for machine learning workflows, model training, inference, and evaluation.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-ai-ml-accelerate` | HuggingFace Accelerate distributed training |
+    | `skill-ai-ml-audiocraft` | Meta AudioCraft audio generation |
+    | `skill-ai-ml-axolotl` | Fine-tuning with Axolotl |
+    | `skill-ai-ml-blender-mcp` | Blender scene generation via MCP |
+    | `skill-ai-ml-chroma` | Chroma vector database operations |
+    | `skill-ai-ml-clip` | CLIP image-text embedding |
+    | `skill-ai-ml-dspy` | DSPy prompt optimization |
+    | `skill-ai-ml-faiss` | FAISS vector similarity search |
+    | `skill-ai-ml-flash-attention` | Flash Attention 2 setup and usage |
+    | `skill-ai-ml-gguf` | GGUF model conversion and quantization |
+    | `skill-ai-ml-godmode` | Unrestricted multi-step AI reasoning |
+    | `skill-ai-ml-grpo-rl-training` | Group Relative Policy Optimization RL training |
+    | `skill-ai-ml-guidance` | Microsoft Guidance structured generation |
+    | `skill-ai-ml-hermes-atropos-environments` | Hermes + Atropos RL environment setup |
+    | `skill-ai-ml-huggingface-hub` | HuggingFace Hub model management |
+    | `skill-ai-ml-huggingface-tokenizers` | Tokenizer inspection and benchmarking |
+    | `skill-ai-ml-instructor` | Instructor structured output extraction |
+    | `skill-ai-ml-jupyter-live-kernel` | Live Jupyter kernel execution |
+    | `skill-ai-ml-llama-cpp` | llama.cpp local inference |
+    | `skill-ai-ml-llava` | LLaVA multimodal vision-language model |
+    | `skill-ai-ml-lm-evaluation-harness` | EleutherAI LM eval harness |
+    | `skill-ai-ml-multimodal-knowledge` | Multimodal knowledge ingestion and Q&A |
+    | `skill-ai-ml-nemo-curator` | NVIDIA NeMo data curation |
+    | `skill-ai-ml-obliteratus` | Model ablation and pruning |
+    | `skill-ai-ml-outlines` | Outlines constrained structured generation |
+    | `skill-ai-ml-peft` | Parameter-efficient fine-tuning (LoRA, QLoRA) |
+    | `skill-ai-ml-pinecone` | Pinecone vector database operations |
+    | `skill-ai-ml-pytorch-fsdp` | PyTorch FSDP distributed training |
+    | `skill-ai-ml-pytorch-lightning` | PyTorch Lightning training loop |
+    | `skill-ai-ml-qdrant` | Qdrant vector database operations |
+    | `skill-ai-ml-saelens` | SAELens sparse autoencoder training |
+    | `skill-ai-ml-segment-anything` | Meta SAM image segmentation |
+    | `skill-ai-ml-simpo` | SimPO preference optimization |
+    | `skill-ai-ml-slime` | SLIME sparse language-image model experiments |
+    | `skill-ai-ml-stable-diffusion` | Stable Diffusion image generation |
+    | `skill-ai-ml-superbrain` | Makakoo Superbrain FTS + vector search |
+    | `skill-ai-ml-switchailocal` | switchAILocal LLM gateway management |
+    | `skill-ai-ml-tensorrt-llm` | NVIDIA TensorRT-LLM inference |
+    | `skill-ai-ml-torchtitan` | PyTorch Titan large-model training |
+    | `skill-ai-ml-trl-fine-tuning` | TRL fine-tuning with RLHF/DPO |
+    | `skill-ai-ml-unsloth` | Unsloth fast LoRA fine-tuning |
+    | `skill-ai-ml-vllm` | vLLM high-throughput inference server |
+    | `skill-ai-ml-weights-and-biases` | Weights & Biases experiment tracking |
+    | `skill-ai-ml-whisper` | OpenAI Whisper speech transcription |
+
+    ```bash
+    makakoo plugin install skill-ai-ml-vllm --core
+    makakoo skill ai-ml-vllm
+    ```
+  </Accordion>
+
+  <Accordion title="Development (skill-dev-*)">
+    Software development workflows: planning, coding, reviewing, shipping, and debugging.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-dev-autoplan` | Auto-generate a development plan |
+    | `skill-dev-blackbox` | Blackbox reverse-engineering analysis |
+    | `skill-dev-brainstorming` | Structured brainstorming sessions |
+    | `skill-dev-checkpoint` | Checkpoint and summarize in-progress work |
+    | `skill-dev-claude-code` | Claude Code workflow integration |
+    | `skill-dev-code-review` | Code review with structured feedback |
+    | `skill-dev-codebase-inspection` | Deep codebase analysis and mapping |
+    | `skill-dev-codex` | OpenAI Codex-style code generation |
+    | `skill-dev-design-consultation` | Architecture design consultation |
+    | `skill-dev-design-review` | Design document review |
+    | `skill-dev-dev-orchestrator` | Multi-agent development orchestration |
+    | `skill-dev-devex-review` | Developer experience audit |
+    | `skill-dev-dispatching-parallel-agents` | Dispatch parallel subagents for a task |
+    | `skill-dev-dogfood` | Dogfood testing protocol |
+    | `skill-dev-executing-plans` | Execute a pre-written development plan |
+    | `skill-dev-finishing-a-development-branch` | Branch completion checklist |
+    | `skill-dev-freeze` | Freeze a branch before release |
+    | `skill-dev-guard` | Guard rails and constraint checking |
+    | `skill-dev-hermes-agent` | Hermes agent workflow |
+    | `skill-dev-hermes-agent-setup` | Set up the Hermes agent environment |
+    | `skill-dev-investigate` | Systematic investigation protocol |
+    | `skill-dev-land-and-deploy` | Land a branch and trigger deploy |
+    | `skill-dev-office-hours` | Structured async office hours format |
+    | `skill-dev-opencode` | OpenCode workflow integration |
+    | `skill-dev-plan` | Write a development plan |
+    | `skill-dev-plan-ceo-review` | CEO-level plan review |
+    | `skill-dev-plan-design-review` | Design-focused plan review |
+    | `skill-dev-plan-devex-review` | DevEx-focused plan review |
+    | `skill-dev-plan-eng-review` | Engineering plan review |
+    | `skill-dev-qa` | Quality assurance workflow |
+    | `skill-dev-qa-only` | QA-only pass (no new code) |
+    | `skill-dev-receiving-code-review` | How to receive and act on code review |
+    | `skill-dev-requesting-code-review` | How to request a code review |
+    | `skill-dev-retro` | Sprint retrospective format |
+    | `skill-dev-review` | General review protocol |
+    | `skill-dev-setup-deploy` | Set up a deployment pipeline |
+    | `skill-dev-ship` | End-to-end ship workflow |
+    | `skill-dev-skill-manager` | Manage and author skills |
+    | `skill-dev-subagent-driven-development` | Subagent-driven TDD workflow |
+    | `skill-dev-systematic-debugging` | Systematic debugging protocol |
+    | `skill-dev-test-driven-development` | TDD workflow |
+    | `skill-dev-unfreeze` | Unfreeze a branch |
+    | `skill-dev-using-git-worktrees` | Git worktree workflow |
+    | `skill-dev-using-superpowers` | Extended capability usage patterns |
+    | `skill-dev-verification-before-completion` | Pre-completion verification checklist |
+    | `skill-dev-writing-plans` | How to write effective development plans |
+    | `skill-dev-writing-skills` | How to write Makakoo skills |
+
+    ```bash
+    makakoo plugin install skill-dev-ship --core
+    makakoo skill dev-ship
+    ```
+  </Accordion>
+
+  <Accordion title="Browser/QA (skill-browser-qa-*)">
+    Browser automation and quality assurance workflows using Chrome DevTools Protocol.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-browser-qa-benchmark` | Browser performance benchmarking |
+    | `skill-browser-qa-browse` | General browsing via browser-harness |
+    | `skill-browser-qa-canary` | Canary smoke tests via browser |
+    | `skill-browser-qa-careful` | Careful, step-by-step browsing workflow |
+    | `skill-browser-qa-connect-chrome` | Connect to an existing Chrome instance |
+    | `skill-browser-qa-open-gstack-browser` | Open a GStack-managed browser session |
+    | `skill-browser-qa-setup-browser-cookies` | Set up browser cookies from a file |
+
+    ```bash
+    makakoo plugin install skill-browser-qa-browse --core
+    makakoo skill browser-qa-browse
+    ```
+  </Accordion>
+
+  <Accordion title="Productivity (skill-productivity-*)">
+    Integrations with productivity tools: Google Workspace, Apple Notes, Obsidian, Notion, Logseq, and more.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-productivity-1password` | 1Password vault integration |
+    | `skill-productivity-agentmail` | AgentMail email agent integration |
+    | `skill-productivity-apple-notes` | Read and write Apple Notes |
+    | `skill-productivity-apple-reminders` | Apple Reminders integration |
+    | `skill-productivity-findmy` | Apple Find My device location |
+    | `skill-productivity-fts5-search` | FTS5 full-text search over Brain |
+    | `skill-productivity-google-workspace` | Gmail, Calendar, and Drive integration |
+    | `skill-productivity-himalaya` | Himalaya email client integration |
+    | `skill-productivity-imessage` | iMessage read and send |
+    | `skill-productivity-linear` | Linear issue tracking integration |
+    | `skill-productivity-logseq` | Connect Makakoo Brain to Logseq app |
+    | `skill-productivity-nano-pdf` | Lightweight PDF reading |
+    | `skill-productivity-notion` | Notion workspace integration |
+    | `skill-productivity-obsidian` | Read, write, and sync any Obsidian vault |
+    | `skill-productivity-ocr-and-documents` | OCR and document extraction |
+    | `skill-productivity-powerpoint` | PowerPoint creation and editing |
+
+    ```bash
+    makakoo plugin install skill-productivity-google-workspace --core
+    makakoo skill productivity-google-workspace
+    ```
+  </Accordion>
+
+  <Accordion title="Research (skill-research-*)">
+    Research and information gathering: academic papers, blogs, domain intelligence, and more.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-research-arxiv` | Search and retrieve arXiv academic papers (no API key required) |
+    | `skill-research-bioinformatics` | Bioinformatics data retrieval and analysis |
+    | `skill-research-blogwatcher` | Monitor and summarize blog feeds |
+    | `skill-research-domain-intel` | Domain intelligence gathering |
+    | `skill-research-duckduckgo-search` | Web search via DuckDuckGo |
+    | `skill-research-ml-paper-writing` | ML paper writing workflow |
+    | `skill-research-multimodal-knowledge` | Multimodal knowledge ingestion from documents |
+    | `skill-research-oss-forensics` | Open-source software forensics |
+    | `skill-research-parallel-cli` | Parallel CLI research dispatching |
+    | `skill-research-qmd` | Quarto Markdown document research |
+    | `skill-research-sherlock` | OSINT and identity research |
+
+    ```bash
+    makakoo plugin install skill-research-arxiv --core
+    makakoo skill research-arxiv
+    ```
+  </Accordion>
+
+  <Accordion title="Infrastructure (skill-infrastructure-*)">
+    Cloud infrastructure, MCP server management, GitHub workflows, and deployment.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-infrastructure-cli` | CLI tooling setup and management |
+    | `skill-infrastructure-docker-management` | Docker container lifecycle |
+    | `skill-infrastructure-fastmcp` | FastMCP server setup and development |
+    | `skill-infrastructure-github-auth` | GitHub authentication setup |
+    | `skill-infrastructure-github-code-review` | GitHub code review workflows |
+    | `skill-infrastructure-github-issues` | GitHub issue management |
+    | `skill-infrastructure-github-pr-workflow` | GitHub PR creation and review workflow |
+    | `skill-infrastructure-github-repo-management` | GitHub repository management |
+    | `skill-infrastructure-harvey-setup` | Harvey MCP server setup |
+    | `skill-infrastructure-harveychat` | HarveyChat messaging gateway setup |
+    | `skill-infrastructure-lambda-labs` | Lambda Labs GPU cloud management |
+    | `skill-infrastructure-mcporter` | MCP server port management |
+    | `skill-infrastructure-modal` | Modal.com serverless deployment |
+    | `skill-infrastructure-native-mcp` | Native MCP server integration |
+    | `skill-infrastructure-openclaw-bridge` | OpenClaw bridge configuration |
+    | `skill-infrastructure-openclaw-migration` | Migrate from legacy OpenClaw config |
+    | `skill-infrastructure-orchestrator` | Multi-agent orchestration infrastructure |
+    | `skill-infrastructure-tytus` | Tytus pod management |
+
+    ```bash
+    makakoo plugin install skill-infrastructure-github-pr-workflow --core
+    makakoo skill infrastructure-github-pr-workflow
+    ```
+  </Accordion>
+
+  <Accordion title="Creative (skill-creative-*)">
+    Creative content generation: ASCII art, video, GIFs, memes, and social media content.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-creative-ascii-art` | ASCII art generation |
+    | `skill-creative-ascii-video` | ASCII video rendering |
+    | `skill-creative-excalidraw` | Excalidraw diagram creation |
+    | `skill-creative-gif-search` | GIF search and retrieval |
+    | `skill-creative-heartmula` | Heartmula generative art |
+    | `skill-creative-meme-generation` | Meme creation workflow |
+    | `skill-creative-songsee` | Song lyrics search and display |
+    | `skill-creative-youtube-content` | YouTube content creation workflow |
+
+    ```bash
+    makakoo plugin install skill-creative-excalidraw --core
+    makakoo skill creative-excalidraw
+    ```
+  </Accordion>
+
+  <Accordion title="Career (skill-career-*)">
+    Career management and professional networking workflows.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-career-career-manager` | Job search and career planning automation |
+    | `skill-career-linkedin-outreach` | LinkedIn connection and outreach workflows |
+
+    ```bash
+    makakoo plugin install skill-career-career-manager --core
+    makakoo skill career-career-manager
+    ```
+  </Accordion>
+
+  <Accordion title="Lifestyle (skill-lifestyle-*)">
+    Lifestyle integrations: gaming, smart home, telephony, and social media.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-lifestyle-minecraft-modpack-server` | Minecraft modpack server management |
+    | `skill-lifestyle-neuroskill-bci` | Neuroskill BCI (brain-computer interface) integration |
+    | `skill-lifestyle-openhue` | Philips Hue smart lighting control |
+    | `skill-lifestyle-pokemon-player` | Pokémon game automation |
+    | `skill-lifestyle-telephony` | Telephony and call management |
+    | `skill-lifestyle-xitter` | X (Twitter) integration |
+
+    ```bash
+    makakoo plugin install skill-lifestyle-openhue --core
+    makakoo skill lifestyle-openhue
+    ```
+  </Accordion>
+
+  <Accordion title="Meta & orchestration (skill-meta-*, skill-orchestration-*)">
+    Self-improvement, memory management, and multi-agent orchestration.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-meta-autoimprove` | Automated self-improvement loop |
+    | `skill-meta-autoimprover` | Autoimprover agent workflow |
+    | `skill-meta-autoresearch` | Automated research loop |
+    | `skill-meta-brain-anchors` | Brain anchor and reference management |
+    | `skill-meta-canary` | Canary health check for Makakoo install |
+    | `skill-meta-caveman-voice` | Caveman voice persona mode |
+    | `skill-meta-cso` | Chief Strategy Officer reasoning mode |
+    | `skill-meta-document-release` | Document release workflow |
+    | `skill-meta-gstack-upgrade` | GStack upgrade workflow |
+    | `skill-meta-harvey-brain` | Harvey Brain introspection |
+    | `skill-meta-health` | Makakoo OS health diagnostics |
+    | `skill-meta-loops` | Proactive improvement loops |
+    | `skill-meta-memory-retrieval` | Memory retrieval optimization |
+    | `skill-meta-meta-harness` | Meta-harness for skill development |
+    | `skill-meta-session-memory-observer` | Session memory observation |
+    | `skill-orchestration-agent-discovery` | Discover and list available agents |
+    | `skill-orchestration-harvey-swarm` | Harvey swarm multi-agent dispatch |
+    | `skill-orchestration-pair-agent` | Pair-programming agent workflow |
+
+    ```bash
+    makakoo plugin install skill-meta-loops --core
+    makakoo skill meta-loops
+    ```
+  </Accordion>
+
+  <Accordion title="Blockchain (skill-blockchain-*)">
+    Blockchain and crypto integrations: Base, Polymarket, Solana.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-blockchain-base` | Base L2 blockchain interactions |
+    | `skill-blockchain-polymarket` | Polymarket prediction market integration |
+    | `skill-blockchain-solana` | Solana blockchain interactions |
+
+    ```bash
+    makakoo plugin install skill-blockchain-polymarket --core
+    makakoo skill blockchain-polymarket
+    ```
+  </Accordion>
+
+  <Accordion title="System (skill-system-*)">
+    System-level operations: file management, health checks, network, and security.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-system-files` | File system operations and management |
+    | `skill-system-health` | System health and resource monitoring |
+    | `skill-system-network` | Network diagnostics and management |
+    | `skill-system-security` | System security audit and hardening |
+
+    ```bash
+    makakoo plugin install skill-system-health --core
+    makakoo skill system-health
+    ```
+  </Accordion>
+
+  <Accordion title="Brain & Tytus (skill-brain-*, skill-tytus-*)">
+    Brain multi-source access and Tytus pod file operations.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-brain-multi-source` | Query multiple Brain sources in parallel |
+    | `skill-tytus-files` | File operations on a Tytus pod |
+
+    ```bash
+    makakoo plugin install skill-brain-multi-source --core
+    makakoo skill brain-multi-source
+    ```
+  </Accordion>
+
+  <Accordion title="Freelance (skill-freelance-*)">
+    Freelance office and client communication workflows.
+
+    | Skill | Purpose |
+    | --- | --- |
+    | `skill-freelance-office` | Freelance office management and client communication |
+
+    ```bash
+    makakoo plugin install skill-freelance-office --core
+    makakoo skill freelance-office
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Discover skills at runtime
+
+The `skill_discover` MCP tool (from `lib-harvey-core`) walks `$MAKAKOO_HOME/plugins/*/SKILL.md` and returns every portable skill file. Use it inside a Harvey session to find skills relevant to your current task:
+
+```bash
+# Install the core library (ships skill_discover)
+makakoo plugin install lib-harvey-core --core
+
+# Discover all installed SKILL.md files
+makakoo skill skill_discover
+```

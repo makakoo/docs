@@ -1,0 +1,204 @@
+---
+title: "AI adapter registry for Makakoo OS"
+description: "Connect external AI endpoints to Makakoo OS with adapter.toml. Install 8 reference adapters for lope validation, Harvey delegation, and swarm dispatch."
+---
+
+An adapter is a single `adapter.toml` file that tells Makakoo OS how to call an external AI endpoint. It pins the transport URL, authentication scheme, output format, capability set, and security sandbox in one place. Once installed, that adapter works across all three consumer surfaces without per-consumer configuration: `lope` code-review validation, Harvey delegation via `makakoo adapter call`, and SANCHO swarm dispatch.
+
+## What an adapter describes
+
+The `adapter.toml` manifest declares:
+
+- **Identity** — name, version, manifest schema version
+- **Transport** — OpenAI-compatible HTTP, subprocess CLI, MCP stdio, or MCP HTTP
+- **Auth** — bearer token, custom header, basic auth, or none
+- **Output format** — how to extract a lope-style verdict from the response
+- **Capabilities** — supported features, models, and consumer roles
+- **Install source** — git tag, HTTPS tarball, PyPI, npm, binary, or local path
+- **Security** — allowlisted network hosts, sandbox profile, required env vars
+- **Health probe** — URL and field assertion checked at install time
+
+Run `makakoo adapter spec` to dump the full adapter manifest schema.
+
+## The 8 reference adapters
+
+Makakoo ships 8 reference adapters at `plugins-core/adapters/`. Install them individually with `--bundled` or all at once with `--pack`.
+
+| Adapter | Transport URL | Required env var |
+| --- | --- | --- |
+| `openclaw` | `http://127.0.0.1:3000` | `OPENCLAW_API_KEY` |
+| `hermes` | `http://127.0.0.1:8642` | `HERMES_API_KEY` |
+| `ollama` | `http://127.0.0.1:11434` | none — localhost |
+| `openrouter` | `https://openrouter.ai` | `OPENROUTER_API_KEY` |
+| `claude-api` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
+| `openai-api` | `https://api.openai.com` | `OPENAI_API_KEY` |
+| `tytus-pod` | `http://10.42.42.1:18080` | `OPENAI_API_KEY` (from `tytus env`) |
+| `llama-cpp-server` | `http://127.0.0.1:8080` | none — localhost |
+
+## Installing adapters
+
+<Tabs>
+  <Tab title="Bulk install (all 8)">
+    Install every reference adapter in a single command:
+
+    ```bash
+    makakoo adapter install plugins-core/adapters \
+        --pack \
+        --allow-unsigned \
+        --skip-health-check
+    makakoo adapter list
+    ```
+
+    `--pack` walks every `<subdir>/adapter.toml` under the given path and installs each one. The signed distribution from `github.com/makakoo/adapters-core` does not require `--allow-unsigned`.
+  </Tab>
+  <Tab title="One at a time">
+    Install individual bundled reference adapters:
+
+    ```bash
+    makakoo adapter install openclaw --bundled
+    makakoo adapter install hermes   --bundled
+    makakoo adapter install ollama   --bundled
+    ```
+  </Tab>
+  <Tab title="From URL">
+    Install an adapter from an HTTPS tarball. Signature verification is required unless you pass `--allow-unsigned`.
+
+    ```bash
+    makakoo adapter install https://example.com/my-adapter.tar.gz \
+        --sha256=a7f2...e9
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Local path installs and unsigned URL installs require `--allow-unsigned`. The main `makakoo-adapters-core` GitHub distribution ships signed manifests, so production installs from that source do not need the flag.
+</Note>
+
+## Adapter commands
+
+```bash
+# List installed adapters
+makakoo adapter list
+
+# List installed + bundled (shows what's available but not yet installed)
+makakoo adapter list --include-bundled
+
+# Show parsed manifest for one adapter
+makakoo adapter info openclaw
+
+# Dump the adapter manifest schema
+makakoo adapter spec
+
+# Call an adapter directly (Harvey delegation)
+makakoo adapter call openclaw
+
+# Run all health probes for one adapter
+makakoo adapter doctor openclaw
+
+# Show status table with last-ok timestamps
+makakoo adapter status
+
+# Update one adapter (prompts on capability drift)
+makakoo adapter update openclaw
+
+# Accept a re-trust prompt non-interactively
+makakoo adapter update openclaw --accept-re-trust
+
+# Migrate a legacy lope config.json to adapter manifests
+makakoo adapter migrate-config ~/.lope/config.json
+```
+
+## Consumer roles
+
+Each adapter declares which consumer roles it supports in `capabilities.supports_roles`. All three consumers share the same manifest — no per-consumer configuration is needed.
+
+| Role | Consumer | How it works |
+| --- | --- | --- |
+| `validator` | `lope negotiate --validators openclaw,hermes "…"` | lope sends the code-review prompt to each listed adapter and collects verdicts |
+| `delegate` | `makakoo adapter call openclaw` | Harvey routes a task directly to the adapter for execution |
+| `swarm_member` | SANCHO swarm dispatch | SANCHO dispatches a `DispatchRequest` to the adapter; the result artifact carries `metadata.adapter` and `metadata.status` |
+
+Example lope validation using two adapters:
+
+```bash
+makakoo adapter install openclaw --bundled
+lope negotiate --validators claude,openclaw "add a retry loop to api/client.go"
+```
+
+## Sandbox profiles
+
+Adapters run under one of four sandbox profiles enforced via `sandbox-exec` (macOS) or `bwrap` (Linux):
+
+| Profile | Network | Filesystem | Use case |
+| --- | --- | --- | --- |
+| `none` | full | full | Dev loop only — warns when selected |
+| `network-io` | allowlisted hosts | install dir + declared write paths | Default for most adapters |
+| `fs-read` | none | read-only host filesystem | Pure-compute adapters |
+| `isolated` | none | install dir only | Highest-risk adapters |
+
+## Trust and re-trust
+
+Every installed adapter gets an entry in `~/.makakoo/trust/adapters.json` capturing the manifest hash, version, trusted-at timestamp, and snapshots of `capabilities.*` and `security.*`. When you run `makakoo adapter update`, the new manifest is diffed against the snapshot. Any change to capabilities or security triggers a re-trust prompt — silent permission creep is structurally prevented.
+
+```bash
+makakoo adapter update openclaw
+# → re-trust required: capabilities.features added "streaming"
+# → review the diff, then:
+makakoo adapter update openclaw --accept-re-trust
+```
+
+## Writing your own adapter
+
+The minimal OpenAI-compatible adapter is about 30 lines of TOML:
+
+```toml
+[adapter]
+name            = "myprovider"
+version         = "0.1.0"
+manifest_schema = 1
+description     = "My provider, OpenAI-compatible"
+
+[compatibility]
+bridge_version = "^2.0"
+protocols      = ["openai-chat-v1"]
+
+[transport]
+kind     = "openai-compatible"
+base_url = "https://api.myprovider.com/v1"
+
+[auth]
+scheme  = "bearer"
+key_env = "MYPROVIDER_API_KEY"
+
+[output]
+format        = "openai-chat"
+verdict_field = "choices.0.message.content"
+
+[capabilities]
+supports_roles = ["validator", "delegate"]
+
+[install]
+source_type = "git"
+source      = "https://github.com/me/myprovider-adapter.git"
+ref         = "v0.1.0"
+
+[security]
+requires_network = true
+allowed_hosts    = ["api.myprovider.com"]
+requires_env     = ["MYPROVIDER_API_KEY"]
+sandbox_profile  = "network-io"
+signed_by        = "me"
+```
+
+Non-HTTP transports are also supported: `subprocess` (wrap a CLI), `mcp-http` (JSON-RPC over HTTP), and `mcp-stdio` (JSON-RPC over stdio).
+
+Validate and test locally:
+
+```bash
+makakoo adapter install ./myprovider-adapter --allow-unsigned --skip-health-check
+makakoo adapter info myprovider
+echo "test prompt" | makakoo adapter call myprovider --bundled
+makakoo adapter doctor myprovider
+```
+
+To submit to the official core pack at `github.com/makakoo/adapters-core`, open a PR with your `adapter.toml`, `adapter.toml.sig`, and `README.md` under `adapters/<name>/`.

@@ -1,0 +1,161 @@
+---
+title: "Get started with Makakoo OS"
+description: "Install Makakoo OS, walk the setup wizard, and make your first Brain query — all AI CLIs sharing one persistent memory in under 5 minutes."
+---
+
+Makakoo OS installs a single persistent Brain on your machine and wires it into every AI CLI you already have — Claude Code, Gemini CLI, Codex, OpenCode, Vibe, Cursor, Qwen, Kimi, and pi. After a one-liner install and a short wizard, every session you open in any of those tools reads from and writes to the same memory. This page walks you from zero to your first Brain query.
+
+<Steps>
+  <Step title="Install Makakoo">
+    Copy the one-liner for your platform and run it in a terminal. The script downloads pre-built `makakoo` and `makakoo-mcp` binaries, places them in your install directory, and automatically runs `makakoo install` to set up the core distro, daemon, and CLI infect step.
+
+    <CodeGroup>
+
+    ```bash macOS / Linux
+    curl -fsSL https://makakoo.com/install.sh | sh
+    ```
+
+    ```powershell Windows
+    iwr -UseBasicParsing https://makakoo.com/install.ps1 | iex
+    ```
+
+    ```bash Homebrew
+    brew install traylinx/tap/makakoo
+    makakoo install
+    ```
+
+    ```bash From source
+    git clone https://github.com/makakoo/makakoo-os
+    cd makakoo-os
+    cargo install --path makakoo
+    cargo install --path makakoo-mcp
+    makakoo install
+    ```
+
+    </CodeGroup>
+
+    <Note>
+      On macOS and Linux the curl-pipe automatically execs `makakoo install` at the end. On Windows, PowerShell does the same. The Homebrew and from-source paths require you to run `makakoo install` yourself after the binary is in place.
+    </Note>
+
+    <Warning>
+      Windows requires **Developer Mode** before running the installer. Go to **Settings → Privacy & security → For developers → Developer Mode** and toggle it on. Makakoo uses symlinks for plugin wiring, which require this permission on Windows.
+    </Warning>
+  </Step>
+
+  <Step title="Walk the setup wizard">
+    After `makakoo install` finishes — installing the `core` distro, registering the background daemon, and infecting every AI CLI it detects — it hands off to the interactive setup wizard automatically.
+
+    The wizard walks six sections in order:
+
+    | Section | What it configures |
+    |---|---|
+    | `persona` | Your assistant's name, pronoun, and voice |
+    | `brain` | Brain source location (defaults to `~/MAKAKOO/data/Brain/`) |
+    | `cli-agent` | Installs pi, the blessed coding agent |
+    | `terminal` | Installs Ghostty (macOS only) |
+    | `model-provider` | Your default LLM adapter |
+    | `infect` | Re-runs infect to catch any new CLI hosts |
+
+    Press Enter at any prompt to accept the default. The wizard is fully idempotent — run it again at any time or re-run a single section:
+
+    ```bash
+    makakoo setup --only model-provider
+    ```
+
+    <Note>
+      macOS may show a security prompt about a background item the first time the daemon registers. Click **Allow** — this is a one-time approval for the LaunchAgent that keeps Makakoo running.
+    </Note>
+  </Step>
+
+  <Step title="Verify the install">
+    Run these commands. All should succeed on a fresh install:
+
+    ```bash
+    makakoo --version
+    makakoo daemon status
+    makakoo sancho status
+    makakoo query "hello"
+    ```
+
+    Expected output:
+
+    ```
+    makakoo 0.1.6
+    ```
+
+    ```
+    running   pid=51234   uptime=2m
+    ```
+
+    ```
+    I don't have any records yet — your Brain is empty. Try writing a
+    journal entry with `makakoo journal add "<text>"`.
+    ```
+
+    <Tip>
+      If `makakoo` is not found after install, add `~/.local/bin` to your PATH. See [Installation](/installation) for the one-line fix.
+    </Tip>
+  </Step>
+
+  <Step title="Open an AI CLI and ask your Brain">
+    Open any infected AI CLI — Claude Code, Gemini CLI, or whichever you have:
+
+    <Tabs>
+      <Tab title="macOS / Linux">
+        ```bash
+        claude
+        # or: gemini, opencode, codex, vibe, qwen
+        ```
+      </Tab>
+      <Tab title="Windows">
+        ```powershell
+        claude
+        # or: gemini, opencode, codex, vibe, qwen
+        ```
+      </Tab>
+    </Tabs>
+
+    Every session now opens with a Makakoo bootstrap block. The AI knows where your Brain lives and has access to memory read and write tools. On a fresh install the Brain is empty, so try:
+
+    ```
+    > Remember I decided to use PostgreSQL for the main database
+    ```
+
+    Makakoo writes that to today's journal automatically.
+  </Step>
+</Steps>
+
+## Your first Brain query
+
+Once you have written something to the Brain — either through an AI CLI or directly — you can search and query it from any terminal:
+
+```bash
+# Full-text search — fast, no LLM required
+makakoo search "PostgreSQL"
+
+# Natural-language query — FTS retrieval fused with LLM synthesis
+makakoo query "what did I decide about the database?"
+
+# Ask anything across all your journals and pages
+makakoo query "what are my active projects?"
+```
+
+The `query` command retrieves the most relevant Brain entries with FTS5, passes them to your configured LLM, and returns a synthesised answer.
+
+## What to do next
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Per-OS details, PATH fix, shell completions, Gatekeeper notes, and upgrade instructions
+  </Card>
+  <Card title="Setup wizard" icon="wand-magic-sparkles" href="/guides/setup-wizard">
+    Re-run individual wizard sections and understand what each one configures
+  </Card>
+  <Card title="Brain and memory" icon="brain" href="/concepts/brain-and-memory">
+    How journals, pages, FTS5, and vector search work together
+  </Card>
+  <Card title="Infect and AI CLIs" icon="virus" href="/concepts/infect-and-ai-clis">
+    Which CLIs are supported and how the bootstrap block works
+  </Card>
+</CardGroup>

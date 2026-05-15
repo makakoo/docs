@@ -1,0 +1,211 @@
+---
+title: "SANCHO proactive task scheduler"
+description: "How SANCHO runs 8 native background tasks and plugin manifest tasks on cadence, with time, active-hours, and idle gates controlling when each task fires."
+---
+
+SANCHO is the proactive task engine that runs inside the Makakoo daemon. While you work (or while you sleep), SANCHO fires scheduled tasks that keep your Brain indexed, your memory consolidated, your databases watched, and your LLM reflection running. You never have to invoke these tasks manually — but you can inspect them, force a tick, or tune their schedules.
+
+## How SANCHO works
+
+SANCHO maintains a registry of tasks — 8 built into the kernel plus any tasks registered by installed plugins via their `plugin.toml` manifests. On every daemon timer tick (roughly every minute), SANCHO evaluates each task against its gates and fires any task that is eligible.
+
+```
+Timer fires
+    │
+    ▼
+For each registered task:
+    │
+    ├── Time gate: has enough time elapsed since last run?
+    ├── Active hours gate: is the current time within the allowed window?
+    └── Idle gate: is the user idle / screen locked? (task-specific)
+         │
+         │ All gates pass?
+         ▼
+     Execute task → write journal entry → update last-run timestamp
+```
+
+## Viewing registered tasks
+
+```bash
+makakoo sancho status
+```
+
+```
+TASK                          CADENCE   LAST RUN         RESULT
+perms_purge_tick              15m       2m ago           ok
+dream                         4h        2h ago           ok
+daily_briefing                8h        1h ago           ok
+memory_consolidation          daily     5h ago           ok
+superbrain_sync               1h        30m ago          ok
+wiki_lint                     daily     6h ago           ok
+dynamic_checklist             6h        3h ago           ok
+gym_classify                  1h        45m ago          ok
+pg_watchdog                   15m       5m ago           ok
+arbitrage_tick                5m        2m ago           ok
+hackernews_monitor            30m       18m ago          ok
+gym_hypothesize               23.5h     1h ago           ok
+watchdog_switchailocal        5m        3m ago           ok
+```
+
+The table shows every registered task — 8 native Rust tasks plus manifest-driven plugin tasks.
+
+## Forcing a tick
+
+`makakoo sancho tick` runs every eligible task immediately — useful right after adding a plugin, or when you want to trigger a sync without waiting for the next scheduled window.
+
+```bash
+makakoo sancho tick
+```
+
+`tick` respects cadence guards. Tasks that already ran within their cadence window are skipped (logged as `skipped`).
+
+## Native tasks
+
+The 8 native tasks are compiled into the kernel and always present.
+
+<AccordionGroup>
+  <Accordion title="dream — LLM reflection on recent work">
+    Reads recent journal entries and asks the LLM to reflect on patterns, decisions, and open threads. Writes insights back to the Brain.
+
+    **Cadence:** every 4 hours  
+    **Active hours:** 1–4 (runs while you sleep)  
+    **Gate:** session (only fires when no active terminal session is detected)
+  </Accordion>
+
+  <Accordion title="daily_briefing — morning summary">
+    Summarises yesterday's work, identifies pending tasks, and sends a briefing to Telegram if configured.
+
+    **Cadence:** every 8 hours  
+    **Active hours:** 7–9 (morning window)
+  </Accordion>
+
+  <Accordion title="memory_consolidation — Brain hygiene">
+    Removes duplicate entries, optimises FTS5 and vector indexes, and cleans old temporary files from `~/MAKAKOO/tmp/`.
+
+    **Cadence:** daily
+  </Accordion>
+
+  <Accordion title="superbrain_sync — Brain to index sync">
+    Walks the Brain directory, indexes new and changed journal entries, updates vector embeddings for any documents that don't have them yet, and optimises the FTS5 search index.
+
+    **Cadence:** hourly
+
+    This is the same operation as `makakoo sync`. The SANCHO task keeps the index continuously current; manual `makakoo sync --embed` is for bulk re-indexing after large imports.
+  </Accordion>
+
+  <Accordion title="wiki_lint — broken wikilink check">
+    Scans the Brain for broken `[[wikilinks]]`, orphaned references, and pages that are referenced but don't exist. Reports issues without auto-fixing so you stay in control.
+
+    **Cadence:** daily
+  </Accordion>
+
+  <Accordion title="dynamic_checklist — HEARTBEAT.md task monitor">
+    Reads `HEARTBEAT.md` files in your projects, checks each task for completion status, and notifies you when a task is due. You define the schedule inside the markdown file.
+
+    **Cadence:** every 6 hours
+
+    Example `HEARTBEAT.md`:
+
+    ```markdown
+    ## Weekly Review
+    - [ ] Review PRs
+    - [ ] Update roadmap
+    Schedule: every monday 09:00
+    ```
+  </Accordion>
+
+  <Accordion title="gym_classify — error log classification">
+    Reads recent error logs from the daemon and plugins, classifies each error by pattern (network, auth, timeout, crash, etc.), and updates the internal error dashboard.
+
+    **Cadence:** hourly
+  </Accordion>
+
+  <Accordion title="pg_watchdog — PostgreSQL health check">
+    Checks active PostgreSQL connections, reports slow queries, and alerts if connections are saturated or queries are stalled.
+
+    **Cadence:** every 15 minutes
+  </Accordion>
+</AccordionGroup>
+
+## Manifest-driven plugin tasks
+
+Plugins register their own SANCHO tasks in `plugin.toml`. These appear in `sancho status` alongside the native tasks.
+
+```toml
+# plugin.toml
+[[sancho_tasks]]
+name   = "arbitrage_tick"
+fn     = "arbitrage.tasks:run_tick"
+every  = "5m"
+active_hours = [6, 23]
+
+[[sancho_tasks]]
+name   = "hackernews_monitor"
+fn     = "hackernews.tasks:check_feed"
+every  = "30m"
+```
+
+The daemon picks up new task registrations on its next restart. Run `makakoo daemon uninstall && makakoo daemon install` to apply a manifest change immediately.
+
+## Gates
+
+Every SANCHO task is subject to one or more gates. A task only fires when **all** its gates pass.
+
+### Time gate
+
+Every task has a minimum cadence. SANCHO tracks the last-run timestamp and skips a task if it ran more recently than its interval:
+
+| Format | Example | Meaning |
+|---|---|---|
+| `Nm` | `5m` | Every N minutes |
+| `Nh` | `4h` | Every N hours |
+| `Nd` | `1d` | Every N days (daily) |
+
+### Active hours gate
+
+Some tasks should only run during a specific time window. The gate compares the current local time against the declared `active_hours` range in the manifest. A task with `active_hours = [6, 23]` will only fire between 06:00 and 23:00 local time.
+
+### Idle and session gates
+
+`dream` and `gym_hypothesize` declare additional gates that prevent them from interrupting active work:
+
+- **`session` gate** — task only fires when no active terminal session is detected
+- **`lock` gate** — task only fires when the screen is locked (user is definitely away)
+
+## Configuring tasks
+
+To override a task's interval or active hours, edit `~/.makakoo/config/sancho.toml`:
+
+```toml
+[tasks.dream]
+interval     = "2h"          # Override default 4h
+active_hours = [0, 24]       # Run at any hour
+
+[tasks.superbrain_sync]
+interval = "30m"             # Sync more frequently
+```
+
+To disable a task entirely:
+
+```bash
+# Disable via plugin (for plugin tasks)
+makakoo plugin disable watchdog-postgres
+
+# Or create a disable marker file (for native tasks)
+touch ~/.makakoo/sancho/disabled/dream
+```
+
+## Diagnosing failed tasks
+
+If a task shows `failed` in `sancho status`, find the traceback in the daemon log:
+
+```bash
+makakoo daemon logs -l 100
+# Search the output for the task name to find the exception
+```
+
+## See also
+
+- [Brain and memory in Makakoo OS](/concepts/brain-and-memory) — the `superbrain_sync` target and Brain writes from task output
+- [Capability sandbox and permission model](/concepts/capability-sandbox) — the `sancho/register` capability used by plugin tasks
+- [Infect AI CLIs with shared context](/concepts/infect-and-ai-clis) — how the bootstrap block stays current via SANCHO

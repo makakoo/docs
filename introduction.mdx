@@ -1,0 +1,98 @@
+---
+title: "Makakoo OS: shared AI brain for every CLI"
+description: "Makakoo OS gives every AI CLI on your machine a persistent, shared brain. Local-first, pure Rust, MIT licensed. Install once — Claude, Gemini, Codex all remember."
+---
+
+Makakoo OS is an autonomous cognitive extension that installs once and gives every AI CLI on your machine — Claude Code, Gemini CLI, Codex, OpenCode, Vibe, Cursor, Qwen, Kimi, and pi — the same persistent memory, the same tools, and the same context. No more goldfish sessions. No more repeating yourself.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Get Makakoo running in under 5 minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed per-OS install guide with troubleshooting
+  </Card>
+  <Card title="Core Concepts" icon="brain" href="/concepts/brain-and-memory">
+    Understand the Brain, infect, SANCHO, and the capability sandbox
+  </Card>
+  <Card title="Command Reference" icon="terminal" href="/commands/overview">
+    Every `makakoo` subcommand, flag, and default value
+  </Card>
+</CardGroup>
+
+## What Makakoo OS does
+
+Every AI CLI session starts from zero. Claude doesn't know what you told Gemini yesterday. Codex doesn't know the architectural decision you made in OpenCode last week. Makakoo fixes this.
+
+<CardGroup cols={2}>
+  <Card title="Persistent Brain" icon="database" href="/concepts/brain-and-memory">
+    Logseq-backed markdown journals and pages — readable by any AI CLI, writable through any infected session
+  </Card>
+  <Card title="Infect any AI CLI" icon="virus" href="/concepts/infect-and-ai-clis">
+    One command writes a shared bootstrap block into every AI CLI's config. 9 CLIs + 4 IDE assistants supported
+  </Card>
+  <Card title="Superbrain search" icon="magnifying-glass" href="/commands/search-and-query">
+    FTS5 full-text + vector similarity + LLM synthesis. Ask questions in plain language
+  </Card>
+  <Card title="SANCHO scheduler" icon="clock" href="/concepts/sancho-scheduler">
+    Proactive tasks run while you sleep: daily briefings, memory consolidation, plugin tasks
+  </Card>
+  <Card title="Plugin system" icon="puzzle-piece" href="/plugins/overview">
+    38 sandboxed plugins shipped. Capability-gated, manifest-declared, Python or Rust
+  </Card>
+  <Card title="Distros" icon="box" href="/guides/distros">
+    5 curated bundles — minimal, core, sebastian, creator, trader — for different workflows
+  </Card>
+</CardGroup>
+
+## Get started in 60 seconds
+
+<Steps>
+  <Step title="Install Makakoo">
+    Run the one-liner for your OS — the installer downloads pre-built binaries and hands off to `makakoo install` automatically.
+
+    ```bash macOS / Linux
+    curl -fsSL https://makakoo.com/install.sh | sh
+    ```
+
+    ```powershell Windows
+    iwr -UseBasicParsing https://makakoo.com/install.ps1 | iex
+    ```
+  </Step>
+  <Step title="Walk the setup wizard">
+    `makakoo install` hands off to the interactive wizard automatically. It configures your persona, Brain location, AI CLI hosts, and LLM provider. Press Enter to accept defaults — you can change everything later.
+  </Step>
+  <Step title="Verify it works">
+    ```bash
+    makakoo --version
+    makakoo daemon status
+    makakoo query "hello"
+    ```
+
+    You should see the version, the daemon running, and a Brain query response.
+  </Step>
+  <Step title="Open any AI CLI">
+    ```bash
+    claude
+    # or gemini, codex, opencode, vibe — whichever you have
+    ```
+
+    Every session now opens with a Makakoo bootstrap block. The AI knows your Brain location and has access to memory tools.
+  </Step>
+</Steps>
+
+## Key facts
+
+| | |
+|---|---|
+| **License** | MIT — free forever |
+| **Platform** | macOS · Linux · Windows |
+| **Language** | Pure Rust (kernel) + Python (plugins) |
+| **Telemetry** | None. Your data never leaves your machine |
+| **AI CLIs supported** | Claude Code, Gemini CLI, Codex, OpenCode, Vibe, Cursor, Qwen, Kimi, pi |
+| **Plugins shipped** | 38 (core distro) |
+| **Version** | 0.1.6 |
+
+<Note>
+Makakoo is local-first. The Brain lives at `~/MAKAKOO/data/Brain/` — plain markdown files you own. No account, no cloud sync, no telemetry.
+</Note>

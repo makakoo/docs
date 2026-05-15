@@ -1,0 +1,174 @@
+---
+title: "Remove Makakoo OS from your machine completely"
+description: "How to cleanly remove Makakoo OS: strip CLI infections, unregister the daemon, delete data directories, and handle partial removal scenarios."
+---
+
+Uninstalling Makakoo OS is a clean three-step process that reverses everything the installer did: it strips the bootstrap block from every AI CLI config, removes the background daemon, and deletes both Makakoo directories. If you want to keep some parts — your Brain, for example — there are partial removal options below.
+
+<Warning>
+  `rm -rf ~/MAKAKOO` permanently deletes your Brain journals and pages. This is irreversible. Back up `~/MAKAKOO/data/Brain/` before proceeding if you want to keep your notes.
+
+  ```bash
+  cp -r ~/MAKAKOO/data/Brain ~/Brain-backup-$(date +%Y%m%d)
+  ```
+</Warning>
+
+## Full uninstall
+
+<Steps>
+  <Step title="Remove the bootstrap block from every infected CLI">
+    This strips the fenced Makakoo block from every AI CLI config file (for example, `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`). The CLI configs are left intact; only the Makakoo-managed section is removed.
+
+    Preview what will be removed without making any changes:
+
+    ```bash
+    makakoo uninfect --dry-run
+    ```
+
+    Apply:
+
+    ```bash
+    makakoo uninfect
+    ```
+
+    To target specific CLIs only:
+
+    ```bash
+    makakoo uninfect --target claude,gemini
+    ```
+  </Step>
+
+  <Step title="Stop and unregister the background daemon">
+    This removes the auto-start service so the daemon no longer launches on login. It does not delete any files.
+
+    ```bash
+    makakoo daemon uninstall
+    ```
+
+    **macOS** — the daemon runs as a LaunchAgent. `makakoo daemon uninstall` unloads and removes the plist at `~/Library/LaunchAgents/com.makakoo.daemon.plist`. You can also do it manually:
+
+    ```bash
+    launchctl unload ~/Library/LaunchAgents/com.makakoo.daemon.plist
+    rm ~/Library/LaunchAgents/com.makakoo.daemon.plist
+    ```
+
+    **Linux** — the daemon runs as a systemd user unit. `makakoo daemon uninstall` calls `systemctl --user disable --now makakoo` and removes the unit file. You can also do it manually:
+
+    ```bash
+    systemctl --user disable --now makakoo
+    rm ~/.config/systemd/user/makakoo.service
+    systemctl --user daemon-reload
+    ```
+  </Step>
+
+  <Step title="Delete Makakoo directories">
+    <Warning>
+      This step deletes your Brain permanently. Run the backup command above before continuing if you want to keep your notes.
+    </Warning>
+
+    ```bash
+    rm -rf ~/.makakoo ~/MAKAKOO
+    ```
+
+    What each directory contains:
+
+    | Directory | Contents | Recoverable? |
+    |---|---|---|
+    | `~/MAKAKOO/` | Brain journals, pages, plugins, state files | No — back up first |
+    | `~/.makakoo/` | Adapter registry, trust keys, cache | Yes — safe to delete |
+
+    If you installed via Homebrew, also remove the binaries:
+
+    ```bash
+    brew uninstall makakoo
+    brew uninstall makakoo-mcp
+    ```
+
+    If you installed via Cargo:
+
+    ```bash
+    cargo uninstall makakoo
+    cargo uninstall makakoo-mcp
+    ```
+  </Step>
+
+</Steps>
+
+## Partial uninstall scenarios
+
+<AccordionGroup>
+
+  <Accordion title="Keep the Brain, remove everything else">
+    Back up the Brain first, then run a full uninstall:
+
+    ```bash
+    cp -r ~/MAKAKOO/data/Brain ~/Brain-backup-$(date +%Y%m%d)
+
+    makakoo uninfect
+    makakoo daemon uninstall
+    rm -rf ~/.makakoo ~/MAKAKOO
+    ```
+
+    Your Brain backup at `~/Brain-backup-<date>/` is plain Logseq-format markdown. You can open it in Obsidian, Logseq, or any text editor at any time.
+  </Accordion>
+
+  <Accordion title="Remove the daemon only (keep Brain and infect)">
+    ```bash
+    makakoo daemon uninstall
+    ```
+
+    The Brain and CLI infections remain intact. You can reinstall the daemon later with `makakoo daemon install`.
+  </Accordion>
+
+  <Accordion title="Remove infect from specific CLIs only">
+    ```bash
+    makakoo uninfect --target claude,gemini
+    ```
+
+    Replace `claude,gemini` with any comma-separated list of CLI names. Run `makakoo status` to see which CLIs are currently infected. Other CLIs remain infected and the daemon keeps running.
+  </Accordion>
+
+  <Accordion title="Remove machine-local config but keep the Brain">
+    `~/.makakoo/` holds machine-local state (adapter registry, trust keys, cache) and is safe to delete without losing Brain content:
+
+    ```bash
+    rm -rf ~/.makakoo
+    ```
+
+    You will lose your adapter trust configuration and primary-adapter choice. Re-run `makakoo setup` to restore them.
+  </Accordion>
+
+</AccordionGroup>
+
+## Troubleshooting the uninstall
+
+**Daemon won't stop:**
+
+```bash
+makakoo daemon status
+pkill -f makakoo-daemon
+ps aux | grep makakoo
+```
+
+**Files still present after `rm -rf`:**
+
+```bash
+sudo rm -rf ~/.makakoo ~/MAKAKOO
+ls -la ~ | grep -i makakoo
+```
+
+**CLIs still show the bootstrap block after `makakoo uninfect`:**
+
+The `uninfect` command removes the block using its fenced markers (`# MAKAKOO START` / `# MAKAKOO END`). If the block was manually edited and the markers were removed, you will need to delete the block by hand. Open the config file for your CLI (for example, `~/.claude/CLAUDE.md`) and remove the Makakoo section.
+
+## Reinstalling after a clean uninstall
+
+```bash
+curl -fsSL https://makakoo.com/install.sh | sh
+```
+
+```powershell
+iwr -UseBasicParsing https://makakoo.com/install.ps1 | iex
+```
+
+The installer detects a clean state and runs the full setup wizard from scratch.

@@ -1,0 +1,175 @@
+---
+title: "Brain and memory in Makakoo OS"
+description: "How Makakoo's Brain works: Logseq markdown journals and pages, FTS5 plus vector Superbrain search, makakoo sync flags, and the memory promotion pipeline."
+---
+
+The Brain is Makakoo OS's persistent memory layer — a directory of plain Markdown files on your machine that every infected AI CLI can read and write. It replaces the per-session amnesia that makes AI assistants start from zero: notes, decisions, and arguments you recorded three months ago are immediately available to the next assistant you open, in any terminal, without a context-reset ceremony.
+
+## What the Brain is
+
+The Brain lives at `~/MAKAKOO/Brain/` (controlled by `MAKAKOO_HOME`). It uses the same file format as [Logseq](https://logseq.com/), so you can open the directory in Logseq and browse it as a knowledge graph, or edit it with any text editor. Makakoo does not require Logseq to be installed.
+
+```
+~/MAKAKOO/
+└── Brain/
+    ├── journals/           # Daily logs — auto-created, one file per day
+    │   ├── 2026_04_20.md
+    │   └── 2026_04_19.md
+    ├── pages/              # Structured documents — manually created, persistent
+    │   ├── projects/
+    │   ├── decisions/
+    │   └── people/
+    └── superbrain.db       # FTS5 + vector index (SQLite)
+```
+
+### Journals vs pages
+
+**Journals** are daily log files. Makakoo auto-creates the file for today when any AI CLI first writes to the Brain. Entries are appended with a timestamp:
+
+```markdown
+- [[2026-04-20 14:32:00]] Chose PostgreSQL over MySQL for the auth service.
+```
+
+**Pages** are structured, persistent documents. You create them manually (or ask an infected CLI to create them for you). Pages live under `Brain/pages/` and use Logseq's wikilink syntax: `[[Project Name]]`, `[[Decision: Auth DB]]`.
+
+<Note>
+Journals accumulate over time. Pages are reference documents. Think of journals as your internal chat log and pages as your second brain's permanent notes.
+</Note>
+
+## Superbrain: FTS5 + vector search
+
+The Brain directory is indexed by the Superbrain engine, which layers three retrieval mechanisms:
+
+| Layer | Technology | What it finds |
+|---|---|---|
+| Full-text | FTS5 (SQLite) | Keyword matches, exact phrases |
+| Semantic | Vector embeddings (Qdrant) | Related meaning, even without keyword overlap |
+| Synthesis | LLM fusion | Natural-language answers with citations |
+
+The index is stored in `Brain/superbrain.db` and updated automatically by the `superbrain_sync` SANCHO task (runs hourly) and on every `makakoo sync` call.
+
+## Commands
+
+### Query the Brain
+
+`makakoo query` retrieves relevant documents via FTS5, assembles them into an LLM context window, and returns a synthesised answer with source citations:
+
+```bash
+makakoo query "what did I decide about the database migration?"
+```
+
+```bash
+# Increase retrieval breadth (default: top 5 hits)
+makakoo query "polymarket strategy" --top-k 15
+
+# Show the assembled memory block before the LLM answer
+makakoo query "auth service choices" --show-memory
+
+# Use a specific model
+makakoo query "sprint goals" --model minimax/ail-compound
+```
+
+### Search the Brain
+
+`makakoo search` is pure FTS5 — no LLM call, returns matching file paths and excerpts:
+
+```bash
+makakoo search "polymarket"
+makakoo search "PostgreSQL" --limit 20
+```
+
+### Sync and re-index
+
+`makakoo sync` walks the Brain directory and updates the FTS5 and vector indexes. The SANCHO `superbrain_sync` task calls this automatically every hour, but you can trigger it manually after bulk edits:
+
+```bash
+# Incremental sync (skips files whose content hash hasn't changed)
+makakoo sync
+
+# Force re-index every file regardless of hash
+makakoo sync --force
+
+# Also embed documents that don't have vectors yet
+# (requires a reachable embedding gateway at $AIL_BASE_URL)
+makakoo sync --embed
+
+# Embed up to 500 documents in one pass
+makakoo sync --embed --embed-limit 500
+
+# Re-index a single file (useful as a post-write hook)
+makakoo sync --file ~/MAKAKOO/Brain/pages/decisions/auth-db.md
+```
+
+<Tip>
+After a bulk import of notes, run `makakoo sync --embed --force` once to rebuild the full vector index. Subsequent hourly SANCHO syncs keep it current.
+</Tip>
+
+## The write flow
+
+When an infected CLI writes to the Brain, the entry is appended to today's journal and then picked up by the next sync cycle:
+
+```
+AI CLI (infected)
+    │
+    │ makakoo_brain_write (MCP tool)
+    ▼
+makakoo-core Brain Writer
+    │
+    ▼
+~/MAKAKOO/Brain/journals/2026_04_20.md
+    │
+    ▼
+Superbrain Sync (async, next hourly tick or manual makakoo sync)
+    ├── Generate vector embedding
+    ├── Update FTS5 index
+    └── Store in superbrain.db
+```
+
+## Memory promotion pipeline
+
+Not every journal entry deserves to live as a permanent page. The memory promotion pipeline surfaces entries that have been retrieved frequently and promotes them into the `pages/` hierarchy.
+
+```bash
+# See which entries are candidates for promotion
+makakoo promotions
+
+# Show only high-confidence candidates
+makakoo promotions --threshold 0.85 --limit 5
+```
+
+The promoter scores each journal block by retrieval frequency (how often it appeared in `query` results), recency decay, and wikilink density. Blocks above the threshold are listed as promotion candidates. Promotion itself is manual — the assistant proposes a page title and location, and you confirm.
+
+```bash
+# Full memory pipeline diagnostics
+makakoo memory stats
+
+# Machine-readable output for monitoring
+makakoo memory stats --json
+```
+
+<Note>
+Memory promotion is advisory: Makakoo never auto-moves content without confirmation. The pipeline surfaces what matters; you decide what becomes a permanent page.
+</Note>
+
+## Brain directory structure reference
+
+```
+~/MAKAKOO/Brain/
+├── journals/
+│   ├── 2026_04_20.md       # Format: YYYY_MM_DD.md
+│   └── ...
+├── pages/
+│   ├── projects/           # Ongoing work
+│   ├── decisions/          # Architecture and design choices
+│   ├── people/             # Contact and relationship notes
+│   └── ...                 # Any subdirectory structure you prefer
+└── superbrain.db           # Auto-managed; do not edit directly
+```
+
+The `superbrain.db` file is rebuilt from the Markdown sources by `makakoo sync --force`. You can safely delete it and re-sync; the source of truth is always the `.md` files.
+
+## See also
+
+- [SANCHO proactive task scheduler](/concepts/sancho-scheduler) — the `superbrain_sync` task that keeps the index current
+- [Capability sandbox and permission model](/concepts/capability-sandbox) — how plugins declare `brain/read` and `brain/write` capabilities
+- [Infect AI CLIs with shared context](/concepts/infect-and-ai-clis) — how every infected CLI gets access to these Brain tools

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Makakoo OS",
+  "theme": "palm",
+  "colors": {
+    "primary": "#94cb04",
+    "light": "#545454"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/makakoo/makakoo-os"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/makakoo/makakoo-os"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/brain-and-memory",
+              "concepts/infect-and-ai-clis",
+              "concepts/sancho-scheduler",
+              "concepts/capability-sandbox"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/use-cases",
+              "guides/setup-wizard",
+              "guides/distros",
+              "guides/upgrade"
+            ]
+          },
+          {
+            "group": "Command Reference",
+            "pages": [
+              "commands/overview",
+              "commands/search-and-query",
+              "commands/infect-and-uninfect",
+              "commands/plugin",
+              "commands/sancho",
+              "commands/perms",
+              "commands/daemon"
+            ]
+          },
+          {
+            "group": "Plugins & Adapters",
+            "pages": [
+              "plugins/overview",
+              "plugins/writing-a-plugin",
+              "plugins/adapters",
+              "plugins/skills-inventory"
+            ]
+          },
+          {
+            "group": "Troubleshooting & FAQ",
+            "pages": [
+              "troubleshooting/common-issues",
+              "troubleshooting/faq",
+              "troubleshooting/uninstall"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
